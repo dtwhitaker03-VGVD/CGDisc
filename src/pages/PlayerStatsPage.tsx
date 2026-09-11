@@ -21,10 +21,12 @@ export function PlayerStatsPage() {
     .filter((r) => r.playerIds.includes(player.id) && coursesById.has(r.courseId))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  const chartPoints = playerRounds.map((r) => ({
-    date: r.date,
-    rating: roundRating(r.scores[player.id], coursesById.get(r.courseId)!),
-  }));
+  const chartPoints = playerRounds
+    .filter((r) => !r.teamAssignments)
+    .map((r) => ({
+      date: r.date,
+      rating: roundRating(r.scores[player.id], coursesById.get(r.courseId)!),
+    }));
 
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
@@ -80,7 +82,7 @@ export function PlayerStatsPage() {
                         {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        Rating {roundRating(strokes, course)}
+                        {r.teamAssignments ? "Team round" : `Rating ${roundRating(strokes, course)}`}
                       </p>
                     </div>
                   </Link>

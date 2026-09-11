@@ -47,6 +47,9 @@ interface RoundRow {
   date: string;
   notes: string | null;
   created_at: string;
+  handicapped: boolean;
+  handicap_allowances: Record<string, number> | null;
+  team_assignments: Record<string, number> | null;
 }
 
 interface RoundScoreRow {
@@ -95,6 +98,9 @@ function mapRounds(roundRows: RoundRow[], scoreRows: RoundScoreRow[]): Round[] {
       playerIds: rowScores.map((s) => s.player_id),
       scores: Object.fromEntries(rowScores.map((s) => [s.player_id, s.strokes])),
       createdAt: r.created_at,
+      handicapped: r.handicapped,
+      handicapAllowances: r.handicap_allowances ?? undefined,
+      teamAssignments: r.team_assignments ?? undefined,
     };
   });
 }
@@ -240,6 +246,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           date: input.date,
           notes: input.notes ?? null,
           created_by: playerRows.find((p) => p.user_id === selfUserId)?.id ?? null,
+          handicapped: input.handicapped ?? false,
+          handicap_allowances: input.handicapAllowances ?? null,
+          team_assignments: input.teamAssignments ?? null,
         })
         .select()
         .single();
@@ -262,6 +271,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         playerIds: input.playerIds,
         scores: input.scores,
         createdAt: roundData.created_at,
+        handicapped: input.handicapped,
+        handicapAllowances: input.handicapAllowances,
+        teamAssignments: input.teamAssignments,
       };
     };
 
@@ -270,6 +282,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (patch.courseId !== undefined) dbPatch.course_id = patch.courseId;
       if (patch.date !== undefined) dbPatch.date = patch.date;
       if (patch.notes !== undefined) dbPatch.notes = patch.notes ?? null;
+      if (patch.handicapped !== undefined) dbPatch.handicapped = patch.handicapped;
+      if (patch.handicapAllowances !== undefined) {
+        dbPatch.handicap_allowances = patch.handicapAllowances ?? null;
+      }
+      if (patch.teamAssignments !== undefined) {
+        dbPatch.team_assignments = patch.teamAssignments ?? null;
+      }
       if (Object.keys(dbPatch).length > 0) {
         const { error } = await supabase.from("rounds").update(dbPatch).eq("id", id);
         if (error) throw new Error(error.message);

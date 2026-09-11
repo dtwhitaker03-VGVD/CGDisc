@@ -40,8 +40,21 @@ create table if not exists public.rounds (
   date date not null,
   notes text,
   created_by uuid references public.players (id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Handicap allowances, if any, are locked in from each player's handicap
+  -- at round start (relative to the lowest in the group) so they don't
+  -- shift retroactively as handicaps change later.
+  handicapped boolean not null default false,
+  handicap_allowances jsonb, -- { "<playerId>": <bonus strokes>, ... }
+  -- Team rounds: playerId -> team index (0-based). Team rounds are excluded
+  -- from handicap/rating calculations entirely (see playerDifferentials).
+  team_assignments jsonb
 );
+
+alter table public.rounds
+  add column if not exists handicapped boolean not null default false,
+  add column if not exists handicap_allowances jsonb,
+  add column if not exists team_assignments jsonb;
 
 -- One row per player per round; strokes is the per-hole score array, same
 -- order as the course's holes at the time the round was played.
@@ -53,20 +66,35 @@ create table if not exists public.round_scores (
 );
 
 -- ---------------------------------------------------------------------------
--- Auto-create a player row whenever someone signs up
+-- Auto-create (or claim) a player row whenever someone signs up
 -- ---------------------------------------------------------------------------
 
+-- If a guest player (added by name only, before they had an account) already
+-- exists with this exact name, claim that row instead of creating a
+-- duplicate -- this is how "add a friend by name" reconciles with them
+-- later signing up for their own account, preserving their round history.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  new_name text := coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1));
+  existing_guest_id uuid;
 begin
-  insert into public.players (user_id, name)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1))
-  );
+  select id into existing_guest_id
+  from public.players
+  where user_id is null
+    and lower(trim(name)) = lower(trim(new_name))
+  order by created_at
+  limit 1;
+
+  if existing_guest_id is not null then
+    update public.players set user_id = new.id where id = existing_guest_id;
+  else
+    insert into public.players (user_id, name) values (new.id, new_name);
+  end if;
+
   return new;
 end;
 $$;

@@ -13,7 +13,15 @@ handicaps with them.
   with per-hole par (9, 18, or custom hole counts) and distance.
 - **New round** — a phone-friendly 3-step flow: pick a course, pick who's
   playing (including quick-add for guest friends who don't want an account),
-  then enter scores hole-by-hole with big tap-friendly +/- steppers.
+  then enter scores hole-by-hole with big tap-friendly +/- steppers. Three
+  round types:
+  - **Straight up** — individual scores, counts toward everyone's handicap.
+  - **Handicapped** — once everyone playing has a handicap (3+ rounds each),
+    each player gets bonus strokes relative to the group's best handicap,
+    with a live net leaderboard as scores come in.
+  - **Team** — group players into 2+ teams with a live team-total
+    leaderboard; scores are entered per player as usual but don't count
+    toward anyone's individual handicap or rating.
 - **Ratings** — every round gets an estimated rating, self-consistent per
   course and tunable via each course's "rating basis" and "points per throw".
 - **Handicaps** — a running handicap per player, computed from their best
@@ -40,8 +48,9 @@ other; it is **not** meant for a public, multi-tenant app.
    with another project's database).
 2. Open the SQL Editor and run the contents of [`supabase/schema.sql`](supabase/schema.sql).
    It creates the tables, security policies, a trigger that auto-creates a
-   player profile whenever someone signs up, enables realtime sync, and
-   seeds the local courses. It's safe to re-run.
+   player profile whenever someone signs up (or claims a matching guest
+   player if one with that exact name was already added -- see below),
+   enables realtime sync, and seeds the local courses. It's safe to re-run.
 3. From Settings > API, copy the **Project URL** and the **anon / public**
    key (never the `service_role` key) into `.env` (copy `.env.example`).
    The anon key is designed to be public client-side — Supabase's own docs
@@ -51,6 +60,19 @@ other; it is **not** meant for a public, multi-tenant app.
 4. By default Supabase requires confirming a new account's email before it
    can sign in. For a quick "just my friends" setup you can turn that off
    under Authentication > Sign In / Providers > Email > "Confirm email".
+   (Its built-in email sender also has a very low send-rate limit meant only
+   for testing, so leaving confirmation on can quickly lock out real signups.)
+
+### Guest players and claiming an account
+
+Adding a friend by name (in Players, or mid-round in New Round) creates a
+"guest" player with no login. If that person later signs up with the exact
+same name (case/whitespace-insensitive), the signup trigger links their new
+account to that existing player row instead of creating a duplicate, so
+their round history carries over. The app's signup form reminds people of
+this. A name that doesn't match exactly (e.g. "Dave" added as a guest,
+signing up as "David") won't merge -- fix it by asking whoever manages the
+database to update the guest row's name to match, or just accept two rows.
 
 ## Development
 

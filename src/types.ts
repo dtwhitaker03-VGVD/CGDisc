@@ -35,4 +35,17 @@ export interface Round {
   scores: Record<string, number[]>;
   notes?: string;
   createdAt: string;
+  /** True if this round was played with handicap allowances applied. */
+  handicapped?: boolean;
+  /**
+   * playerId -> bonus strokes for this round, locked in at round start from
+   * each player's handicap at the time (relative to the lowest in the
+   * group). Only present when handicapped is true.
+   */
+  handicapAllowances?: Record<string, number>;
+  /**
+   * playerId -> team index (0-based), when this was played as a team round.
+   * Team rounds don't count toward anyone's handicap or rating history.
+   */
+  teamAssignments?: Record<string, number>;
 }
