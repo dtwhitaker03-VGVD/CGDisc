@@ -77,7 +77,11 @@ export function RoundDetailPage() {
             {course.holes.map((hole, i) => (
               <tr key={hole.number} className="border-t border-slate-100">
                 <td className="py-1.5 sticky left-0 bg-white pr-2 whitespace-nowrap">
-                  {hole.number} <span className="text-slate-400">(par {hole.par})</span>
+                  {hole.number}{" "}
+                  <span className="text-slate-400">
+                    (par {hole.par}
+                    {hole.distanceFt ? `, ${hole.distanceFt}ft` : ""})
+                  </span>
                 </td>
                 {round.playerIds.map((pid) => (
                   <td key={pid} className="px-1 py-1.5 text-center">

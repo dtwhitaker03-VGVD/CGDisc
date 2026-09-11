@@ -205,7 +205,10 @@ export function NewRoundPage() {
           <Card key={hole.number} className="flex items-center justify-between py-2.5">
             <div>
               <p className="font-semibold text-slate-800">Hole {hole.number}</p>
-              <p className="text-xs text-slate-400">Par {hole.par}</p>
+              <p className="text-xs text-slate-400">
+                Par {hole.par}
+                {hole.distanceFt ? ` · ${hole.distanceFt} ft` : ""}
+              </p>
             </div>
             <ScoreStepper
               value={activeScores[i] ?? hole.par}

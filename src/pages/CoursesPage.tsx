@@ -39,6 +39,10 @@ export function CoursesPage() {
                 )}
                 <p className="text-sm text-slate-400 mt-1">
                   {course.holes.length} holes · par {coursePar(course)}
+                  {course.holes.some((h) => h.distanceFt) &&
+                    ` · ${course.holes
+                      .reduce((s, h) => s + (h.distanceFt ?? 0), 0)
+                      .toLocaleString()} ft`}
                 </p>
               </Card>
             </Link>

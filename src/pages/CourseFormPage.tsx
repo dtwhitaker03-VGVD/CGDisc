@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { DEFAULT_POINTS_PER_THROW } from "../lib/ratings";
@@ -7,6 +7,10 @@ import type { Hole } from "../types";
 
 function buildHoles(count: number, previous: Hole[]): Hole[] {
   return Array.from({ length: count }, (_, i) => previous[i] ?? { number: i + 1, par: 3 });
+}
+
+function formatFeet(n: number): string {
+  return n.toLocaleString();
 }
 
 export function CourseFormPage() {
@@ -45,6 +49,13 @@ export function CourseFormPage() {
       setRatingBasis(next.reduce((s, h) => s + h.par, 0));
     }
   }
+
+  function setDistance(index: number, distanceFt: number | undefined) {
+    setHoles((prev) => prev.map((h, i) => (i === index ? { ...h, distanceFt } : h)));
+  }
+
+  const totalDistance = holes.reduce((s, h) => s + (h.distanceFt ?? 0), 0);
+  const hasAnyDistance = holes.some((h) => h.distanceFt);
 
   function handleSave() {
     if (!name.trim() || holes.length === 0) return;
@@ -124,12 +135,23 @@ export function CourseFormPage() {
           </div>
 
           <p className="text-sm font-medium text-slate-700 mb-2">
-            Par per hole <span className="text-slate-400 font-normal">(total par {totalPar})</span>
+            Par &amp; distance per hole{" "}
+            <span className="text-slate-400 font-normal">
+              (total par {totalPar}
+              {hasAnyDistance ? `, ${formatFeet(totalDistance)} ft` : ""})
+            </span>
           </p>
-          <div className="grid grid-cols-6 gap-2">
+          <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1.5 items-center">
+            <div />
+            <div className="text-[10px] uppercase tracking-wide text-slate-400 text-center">
+              Par
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-slate-400 text-center">
+              Distance (ft)
+            </div>
             {holes.map((hole, i) => (
-              <div key={hole.number} className="text-center">
-                <div className="text-[10px] text-slate-400 mb-0.5">#{hole.number}</div>
+              <Fragment key={hole.number}>
+                <div className="text-xs text-slate-500 w-8">#{hole.number}</div>
                 <input
                   type="number"
                   min={1}
@@ -138,7 +160,17 @@ export function CourseFormPage() {
                   value={hole.par}
                   onChange={(e) => setPar(i, Math.max(1, Number(e.target.value) || 1))}
                 />
-              </div>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded-lg border border-slate-300 py-1.5 text-center text-sm"
+                  placeholder="—"
+                  value={hole.distanceFt ?? ""}
+                  onChange={(e) =>
+                    setDistance(i, e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)))
+                  }
+                />
+              </Fragment>
             ))}
           </div>
         </Card>

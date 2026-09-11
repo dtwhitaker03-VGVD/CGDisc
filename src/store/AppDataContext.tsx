@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useStoredState } from "../lib/storage";
 import { makeId } from "../lib/id";
 import { coursePar } from "../lib/ratings";
+import { DEFAULT_COURSES } from "../data/defaultCourses";
 import type { Course, Hole, Player, Round } from "../types";
 
 const PLAYER_COLORS = [
@@ -43,7 +44,7 @@ function nextColor(existing: Player[]): string {
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [courses, setCourses] = useStoredState<Course[]>("courses", []);
+  const [courses, setCourses] = useStoredState<Course[]>("courses", DEFAULT_COURSES);
   const [players, setPlayers] = useStoredState<Player[]>("players", []);
   const [rounds, setRounds] = useStoredState<Round[]>("rounds", []);
 
