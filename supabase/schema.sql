@@ -85,37 +85,41 @@ alter table public.courses enable row level security;
 alter table public.rounds enable row level security;
 alter table public.round_scores enable row level security;
 
+-- Note: this app does not use Supabase anonymous sign-ins, so `to authenticated`
+-- alone (no per-row ownership check) is sufficient to mean "any real signed-in
+-- user of this app" -- matching the shared-trust model described above.
+
 drop policy if exists "authenticated read players" on public.players;
 create policy "authenticated read players" on public.players for select
-  using (auth.role() = 'authenticated');
+  to authenticated using (true);
 
 drop policy if exists "authenticated write players" on public.players;
 create policy "authenticated write players" on public.players for all
-  using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  to authenticated using (true) with check (true);
 
 drop policy if exists "authenticated read courses" on public.courses;
 create policy "authenticated read courses" on public.courses for select
-  using (auth.role() = 'authenticated');
+  to authenticated using (true);
 
 drop policy if exists "authenticated write courses" on public.courses;
 create policy "authenticated write courses" on public.courses for all
-  using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  to authenticated using (true) with check (true);
 
 drop policy if exists "authenticated read rounds" on public.rounds;
 create policy "authenticated read rounds" on public.rounds for select
-  using (auth.role() = 'authenticated');
+  to authenticated using (true);
 
 drop policy if exists "authenticated write rounds" on public.rounds;
 create policy "authenticated write rounds" on public.rounds for all
-  using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  to authenticated using (true) with check (true);
 
 drop policy if exists "authenticated read round_scores" on public.round_scores;
 create policy "authenticated read round_scores" on public.round_scores for select
-  using (auth.role() = 'authenticated');
+  to authenticated using (true);
 
 drop policy if exists "authenticated write round_scores" on public.round_scores;
 create policy "authenticated write round_scores" on public.round_scores for all
-  using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+  to authenticated using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
 -- Realtime: push live changes to every connected device
