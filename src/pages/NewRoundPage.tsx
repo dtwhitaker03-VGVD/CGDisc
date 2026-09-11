@@ -21,7 +21,7 @@ export function NewRoundPage() {
   const [newFriendName, setNewFriendName] = useState("");
   const [date, setDate] = useState(todayIso());
   const [scores, setScores] = useState<Record<string, number[]>>({});
-  const [activePlayer, setActivePlayer] = useState<string | null>(null);
+  const [activeHoleIndex, setActiveHoleIndex] = useState(0);
 
   const course = useMemo(() => courses.find((c) => c.id === courseId) ?? null, [courses, courseId]);
 
@@ -43,7 +43,7 @@ export function NewRoundPage() {
       initial[pid] = course.holes.map((h) => h.par);
     }
     setScores(initial);
-    setActivePlayer(playerIds[0]);
+    setActiveHoleIndex(0);
     setStep(3);
   }
 
@@ -164,67 +164,92 @@ export function NewRoundPage() {
     );
   }
 
-  if (!course || !activePlayer) return null;
+  if (!course) return null;
 
-  const activeScores = scores[activePlayer] ?? [];
-  const activeTotal = activeScores.reduce((s, v) => s + v, 0);
-  const activeRel = course ? scoreToPar(activeScores, course) : 0;
+  const hole = course.holes[activeHoleIndex];
+  const isFirstHole = activeHoleIndex === 0;
+  const isLastHole = activeHoleIndex === course.holes.length - 1;
+
+  function goToHole(index: number) {
+    setActiveHoleIndex(Math.max(0, Math.min(course!.holes.length - 1, index)));
+  }
 
   return (
     <div>
       <PageHeader title="New round" subtitle={`Step 3 of 3 · ${course.name}`} />
 
       <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-4 px-4">
+        {course.holes.map((h, i) => (
+          <button
+            key={h.number}
+            type="button"
+            onClick={() => goToHole(i)}
+            className={`shrink-0 w-9 h-9 rounded-full text-sm font-semibold ${
+              i === activeHoleIndex ? "bg-green-700 text-white" : "bg-slate-100 text-slate-700"
+            }`}
+          >
+            {h.number}
+          </button>
+        ))}
+      </div>
+
+      <Card className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="font-bold text-lg text-slate-900">Hole {hole.number}</p>
+          <p className="text-sm text-slate-400">
+            Par {hole.par}
+            {hole.distanceFt ? ` · ${hole.distanceFt} ft` : ""}
+          </p>
+        </div>
+        <p className="text-sm text-slate-400">
+          {activeHoleIndex + 1} of {course.holes.length}
+        </p>
+      </Card>
+
+      <div className="space-y-2 mb-4">
         {playerIds.map((pid) => {
           const player = players.find((p) => p.id === pid);
-          if (!player) return null;
+          const playerScores = scores[pid];
+          if (!player || !playerScores) return null;
+          const total = playerScores.reduce((s, v) => s + v, 0);
+          const rel = scoreToPar(playerScores, course);
           return (
-            <button
-              key={pid}
-              type="button"
-              onClick={() => setActivePlayer(pid)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium ${
-                activePlayer === pid ? "bg-green-700 text-white" : "bg-slate-100 text-slate-700"
-              }`}
-            >
-              {player.name}
-            </button>
+            <Card key={pid} className="flex items-center justify-between py-2.5">
+              <div>
+                <p className="font-semibold text-slate-800 flex items-center gap-2">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: player.color }}
+                  />
+                  {player.name}
+                </p>
+                <p className="text-xs text-slate-400">
+                  Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                </p>
+              </div>
+              <ScoreStepper
+                value={playerScores[activeHoleIndex] ?? hole.par}
+                par={hole.par}
+                onChange={(v) => setHoleScore(pid, activeHoleIndex, v)}
+              />
+            </Card>
           );
         })}
       </div>
 
-      <Card className="mb-3 flex items-center justify-between">
-        <span className="text-sm text-slate-500">Total</span>
-        <span className="font-bold text-lg tabular-nums">
-          {activeTotal} ({activeRel === 0 ? "E" : activeRel > 0 ? `+${activeRel}` : activeRel})
-        </span>
-      </Card>
-
-      <div className="space-y-2 mb-4">
-        {course.holes.map((hole, i) => (
-          <Card key={hole.number} className="flex items-center justify-between py-2.5">
-            <div>
-              <p className="font-semibold text-slate-800">Hole {hole.number}</p>
-              <p className="text-xs text-slate-400">
-                Par {hole.par}
-                {hole.distanceFt ? ` · ${hole.distanceFt} ft` : ""}
-              </p>
-            </div>
-            <ScoreStepper
-              value={activeScores[i] ?? hole.par}
-              par={hole.par}
-              onChange={(v) => setHoleScore(activePlayer, i, v)}
-            />
-          </Card>
-        ))}
-      </div>
-
       <div className="flex gap-2">
-        <Button variant="secondary" className="flex-1" onClick={() => setStep(2)}>
-          Back
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={() => (isFirstHole ? setStep(2) : goToHole(activeHoleIndex - 1))}
+        >
+          {isFirstHole ? "Back" : "Previous hole"}
         </Button>
-        <Button className="flex-1" onClick={handleSave}>
-          Save round
+        <Button
+          className="flex-1"
+          onClick={() => (isLastHole ? handleSave() : goToHole(activeHoleIndex + 1))}
+        >
+          {isLastHole ? "Save round" : "Next hole"}
         </Button>
       </div>
     </div>
