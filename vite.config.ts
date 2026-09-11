@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'CGDisc',
         short_name: 'CGDisc',
         description: 'Track disc golf rounds, ratings, and handicaps with friends.',
-        theme_color: '#0a4f2c',
+        theme_color: '#0f4438',
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
