@@ -66,6 +66,10 @@ export function AuthPage() {
                     placeholder="David"
                     autoComplete="name"
                   />
+                  <p className="text-xs text-slate-400 mt-1">
+                    If a friend already added you by name before you signed up, use the exact
+                    same name here so your rounds link up automatically.
+                  </p>
                 </Field>
               )}
               <Field label="Email">

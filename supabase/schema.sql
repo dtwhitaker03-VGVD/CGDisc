@@ -53,20 +53,35 @@ create table if not exists public.round_scores (
 );
 
 -- ---------------------------------------------------------------------------
--- Auto-create a player row whenever someone signs up
+-- Auto-create (or claim) a player row whenever someone signs up
 -- ---------------------------------------------------------------------------
 
+-- If a guest player (added by name only, before they had an account) already
+-- exists with this exact name, claim that row instead of creating a
+-- duplicate -- this is how "add a friend by name" reconciles with them
+-- later signing up for their own account, preserving their round history.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  new_name text := coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1));
+  existing_guest_id uuid;
 begin
-  insert into public.players (user_id, name)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1))
-  );
+  select id into existing_guest_id
+  from public.players
+  where user_id is null
+    and lower(trim(name)) = lower(trim(new_name))
+  order by created_at
+  limit 1;
+
+  if existing_guest_id is not null then
+    update public.players set user_id = new.id where id = existing_guest_id;
+  else
+    insert into public.players (user_id, name) values (new.id, new_name);
+  end if;
+
   return new;
 end;
 $$;
