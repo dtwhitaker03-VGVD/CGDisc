@@ -20,6 +20,8 @@ export interface Player {
   id: string;
   name: string;
   isSelf?: boolean;
+  /** True if this player has their own login (vs. a guest added by name only). */
+  hasAccount?: boolean;
   color: string;
   createdAt: string;
 }

@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
+import { useAuth } from "../store/AuthContext";
 import { computeHandicap, playerDifferentials, roundRating, scoreToPar } from "../lib/ratings";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 
 export function HomePage() {
   const { players, rounds, courses, coursesById } = useAppData();
+  const { session, signOut } = useAuth();
 
   const standings = players
     .map((p) => {
@@ -23,7 +25,20 @@ export function HomePage() {
 
   return (
     <div>
-      <PageHeader title="CGDisc" subtitle="Your disc golf rounds, ratings & handicaps" />
+      <PageHeader
+        title="CGDisc"
+        subtitle="Your disc golf rounds, ratings & handicaps"
+        action={
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="text-xs text-slate-400 underline"
+            title={session?.user.email}
+          >
+            Sign out
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <LinkButton to="/round/new">🥏 New round</LinkButton>
@@ -72,7 +87,7 @@ export function HomePage() {
           <EmptyState
             icon="👥"
             title="No players yet"
-            subtitle="Add yourself and your friends to start tracking handicaps."
+            subtitle="Add your friends to start tracking handicaps together."
             action={<LinkButton to="/players">Add players</LinkButton>}
           />
         ) : rounds.length === 0 ? (
