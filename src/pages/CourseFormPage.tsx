@@ -57,28 +57,38 @@ export function CourseFormPage() {
   const totalDistance = holes.reduce((s, h) => s + (h.distanceFt ?? 0), 0);
   const hasAnyDistance = holes.some((h) => h.distanceFt);
 
-  function handleSave() {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
     if (!name.trim() || holes.length === 0) return;
-    if (isEdit && existing) {
-      updateCourse(existing.id, {
-        name: name.trim(),
-        location: location.trim() || undefined,
-        holes,
-        pointsPerThrow,
-        ratingBasis,
-      });
+    setSaving(true);
+    try {
+      if (isEdit && existing) {
+        await updateCourse(existing.id, {
+          name: name.trim(),
+          location: location.trim() || undefined,
+          holes,
+          pointsPerThrow,
+          ratingBasis,
+        });
+      } else {
+        const course = await addCourse({
+          name: name.trim(),
+          location: location.trim() || undefined,
+          holes,
+        });
+        await updateCourse(course.id, { pointsPerThrow, ratingBasis });
+      }
       navigate("/courses");
-    } else {
-      const course = addCourse({ name: name.trim(), location: location.trim() || undefined, holes });
-      updateCourse(course.id, { pointsPerThrow, ratingBasis });
-      navigate("/courses");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!existing) return;
     if (confirm(`Delete "${existing.name}"? This also deletes any rounds played there.`)) {
-      deleteCourse(existing.id);
+      await deleteCourse(existing.id);
       navigate("/courses");
     }
   }
@@ -212,8 +222,8 @@ export function CourseFormPage() {
           </Card>
         )}
 
-        <Button className="w-full" onClick={handleSave} disabled={!name.trim()}>
-          {isEdit ? "Save changes" : "Add course"}
+        <Button className="w-full" onClick={handleSave} disabled={!name.trim() || saving}>
+          {saving ? "Saving…" : isEdit ? "Save changes" : "Add course"}
         </Button>
 
         {isEdit && (

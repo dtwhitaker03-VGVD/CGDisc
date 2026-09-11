@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local AI agent skill installs (npx skills add), not part of the app
+.agents/
+.claude/
+skills-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

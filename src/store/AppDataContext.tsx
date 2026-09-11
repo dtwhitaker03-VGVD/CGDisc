@@ -1,8 +1,15 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useStoredState } from "../lib/storage";
-import { makeId } from "../lib/id";
-import { coursePar } from "../lib/ratings";
-import { DEFAULT_COURSES } from "../data/defaultCourses";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "./AuthContext";
+import { coursePar, DEFAULT_POINTS_PER_THROW } from "../lib/ratings";
 import type { Course, Hole, Player, Round } from "../types";
 
 const PLAYER_COLORS = [
@@ -16,22 +23,99 @@ const PLAYER_COLORS = [
   "#4d7c0f",
 ];
 
+interface CourseRow {
+  id: string;
+  name: string;
+  location: string | null;
+  holes: Hole[];
+  rating_basis: number;
+  points_per_throw: number;
+  created_at: string;
+}
+
+interface PlayerRow {
+  id: string;
+  user_id: string | null;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+interface RoundRow {
+  id: string;
+  course_id: string;
+  date: string;
+  notes: string | null;
+  created_at: string;
+}
+
+interface RoundScoreRow {
+  round_id: string;
+  player_id: string;
+  strokes: number[];
+}
+
+function mapCourse(row: CourseRow): Course {
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location ?? undefined,
+    holes: row.holes,
+    ratingBasis: row.rating_basis,
+    pointsPerThrow: row.points_per_throw,
+    createdAt: row.created_at,
+  };
+}
+
+function mapPlayer(row: PlayerRow, selfUserId: string | undefined): Player {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    isSelf: Boolean(selfUserId) && row.user_id === selfUserId,
+    hasAccount: row.user_id !== null,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRounds(roundRows: RoundRow[], scoreRows: RoundScoreRow[]): Round[] {
+  const scoresByRound = new Map<string, RoundScoreRow[]>();
+  for (const s of scoreRows) {
+    const list = scoresByRound.get(s.round_id) ?? [];
+    list.push(s);
+    scoresByRound.set(s.round_id, list);
+  }
+  return roundRows.map((r) => {
+    const rowScores = scoresByRound.get(r.id) ?? [];
+    return {
+      id: r.id,
+      courseId: r.course_id,
+      date: r.date,
+      notes: r.notes ?? undefined,
+      playerIds: rowScores.map((s) => s.player_id),
+      scores: Object.fromEntries(rowScores.map((s) => [s.player_id, s.strokes])),
+      createdAt: r.created_at,
+    };
+  });
+}
+
 interface AppData {
   courses: Course[];
   players: Player[];
   rounds: Round[];
+  loading: boolean;
 
-  addCourse: (input: { name: string; location?: string; holes: Hole[] }) => Course;
-  updateCourse: (id: string, patch: Partial<Omit<Course, "id" | "createdAt">>) => void;
-  deleteCourse: (id: string) => void;
+  addCourse: (input: { name: string; location?: string; holes: Hole[] }) => Promise<Course>;
+  updateCourse: (id: string, patch: Partial<Omit<Course, "id" | "createdAt">>) => Promise<void>;
+  deleteCourse: (id: string) => Promise<void>;
 
-  addPlayer: (name: string, isSelf?: boolean) => Player;
-  updatePlayer: (id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) => void;
-  deletePlayer: (id: string) => void;
+  addPlayer: (name: string) => Promise<Player>;
+  updatePlayer: (id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) => Promise<void>;
+  deletePlayer: (id: string) => Promise<void>;
 
-  addRound: (input: Omit<Round, "id" | "createdAt">) => Round;
-  updateRound: (id: string, patch: Partial<Omit<Round, "id" | "createdAt">>) => void;
-  deleteRound: (id: string) => void;
+  addRound: (input: Omit<Round, "id" | "createdAt">) => Promise<Round>;
+  updateRound: (id: string, patch: Partial<Omit<Round, "id" | "createdAt">>) => Promise<void>;
+  deleteRound: (id: string) => Promise<void>;
 
   coursesById: Map<string, Course>;
   playersById: Map<string, Player>;
@@ -39,86 +123,182 @@ interface AppData {
 
 const AppDataCtx = createContext<AppData | null>(null);
 
-function nextColor(existing: Player[]): string {
-  return PLAYER_COLORS[existing.length % PLAYER_COLORS.length];
-}
-
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [courses, setCourses] = useStoredState<Course[]>("courses", DEFAULT_COURSES);
-  const [players, setPlayers] = useStoredState<Player[]>("players", []);
-  const [rounds, setRounds] = useStoredState<Round[]>("rounds", []);
+  const { session } = useAuth();
+  const selfUserId = session?.user.id;
+
+  const [courseRows, setCourseRows] = useState<CourseRow[]>([]);
+  const [playerRows, setPlayerRows] = useState<PlayerRow[]>([]);
+  const [roundRows, setRoundRows] = useState<RoundRow[]>([]);
+  const [scoreRows, setScoreRows] = useState<RoundScoreRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAll = useCallback(async () => {
+    const [c, p, r, s] = await Promise.all([
+      supabase.from("courses").select("*").order("name"),
+      supabase.from("players").select("*").order("created_at"),
+      supabase.from("rounds").select("*").order("date", { ascending: false }),
+      supabase.from("round_scores").select("*"),
+    ]);
+    if (c.data) setCourseRows(c.data as CourseRow[]);
+    if (p.data) setPlayerRows(p.data as PlayerRow[]);
+    if (r.data) setRoundRows(r.data as RoundRow[]);
+    if (s.data) setScoreRows(s.data as RoundScoreRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    loadAll();
+
+    const channel = supabase
+      .channel("cgdisc-data")
+      .on("postgres_changes", { event: "*", schema: "public", table: "courses" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "players" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "rounds" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "round_scores" }, loadAll)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, loadAll]);
 
   const value = useMemo<AppData>(() => {
-    const addCourse: AppData["addCourse"] = ({ name, location, holes }) => {
-      const course: Course = {
-        id: makeId(),
-        name,
-        location,
-        holes,
-        ratingBasis: holes.reduce((s, h) => s + h.par, 0),
-        pointsPerThrow: 10,
-        createdAt: new Date().toISOString(),
+    const courses = courseRows.map(mapCourse);
+    const players = playerRows.map((row) => mapPlayer(row, selfUserId));
+    const rounds = mapRounds(roundRows, scoreRows);
+
+    const addCourse: AppData["addCourse"] = async ({ name, location, holes }) => {
+      const ratingBasis = holes.reduce((s, h) => s + h.par, 0);
+      const { data, error } = await supabase
+        .from("courses")
+        .insert({
+          name,
+          location: location ?? null,
+          holes,
+          rating_basis: ratingBasis,
+          points_per_throw: DEFAULT_POINTS_PER_THROW,
+        })
+        .select()
+        .single();
+      if (error || !data) throw new Error(error?.message ?? "Failed to add course");
+      await loadAll();
+      return mapCourse(data as CourseRow);
+    };
+
+    const updateCourse: AppData["updateCourse"] = async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) dbPatch.name = patch.name;
+      if (patch.location !== undefined) dbPatch.location = patch.location ?? null;
+      if (patch.holes !== undefined) dbPatch.holes = patch.holes;
+      if (patch.ratingBasis !== undefined) dbPatch.rating_basis = patch.ratingBasis;
+      if (patch.pointsPerThrow !== undefined) dbPatch.points_per_throw = patch.pointsPerThrow;
+      const { error } = await supabase.from("courses").update(dbPatch).eq("id", id);
+      if (error) throw new Error(error.message);
+      await loadAll();
+    };
+
+    const deleteCourse: AppData["deleteCourse"] = async (id) => {
+      const { error } = await supabase.from("courses").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      await loadAll();
+    };
+
+    const addPlayer: AppData["addPlayer"] = async (name) => {
+      const color = PLAYER_COLORS[playerRows.length % PLAYER_COLORS.length];
+      const { data, error } = await supabase
+        .from("players")
+        .insert({ name, color })
+        .select()
+        .single();
+      if (error || !data) throw new Error(error?.message ?? "Failed to add player");
+      await loadAll();
+      return mapPlayer(data as PlayerRow, selfUserId);
+    };
+
+    const updatePlayer: AppData["updatePlayer"] = async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.name !== undefined) dbPatch.name = patch.name;
+      if (patch.color !== undefined) dbPatch.color = patch.color;
+      const { error } = await supabase.from("players").update(dbPatch).eq("id", id);
+      if (error) throw new Error(error.message);
+      await loadAll();
+    };
+
+    const deletePlayer: AppData["deletePlayer"] = async (id) => {
+      const { error } = await supabase.from("players").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      await loadAll();
+    };
+
+    const addRound: AppData["addRound"] = async (input) => {
+      const { data: roundData, error: roundError } = await supabase
+        .from("rounds")
+        .insert({
+          course_id: input.courseId,
+          date: input.date,
+          notes: input.notes ?? null,
+          created_by: playerRows.find((p) => p.user_id === selfUserId)?.id ?? null,
+        })
+        .select()
+        .single();
+      if (roundError || !roundData) throw new Error(roundError?.message ?? "Failed to add round");
+
+      const scoreInserts = input.playerIds.map((playerId) => ({
+        round_id: roundData.id,
+        player_id: playerId,
+        strokes: input.scores[playerId] ?? [],
+      }));
+      const { error: scoresError } = await supabase.from("round_scores").insert(scoreInserts);
+      if (scoresError) throw new Error(scoresError.message);
+
+      await loadAll();
+      return {
+        id: roundData.id,
+        courseId: input.courseId,
+        date: input.date,
+        notes: input.notes,
+        playerIds: input.playerIds,
+        scores: input.scores,
+        createdAt: roundData.created_at,
       };
-      setCourses((prev) => [...prev, course]);
-      return course;
     };
 
-    const updateCourse: AppData["updateCourse"] = (id, patch) => {
-      setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    const updateRound: AppData["updateRound"] = async (id, patch) => {
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.courseId !== undefined) dbPatch.course_id = patch.courseId;
+      if (patch.date !== undefined) dbPatch.date = patch.date;
+      if (patch.notes !== undefined) dbPatch.notes = patch.notes ?? null;
+      if (Object.keys(dbPatch).length > 0) {
+        const { error } = await supabase.from("rounds").update(dbPatch).eq("id", id);
+        if (error) throw new Error(error.message);
+      }
+      if (patch.scores) {
+        const upserts = Object.entries(patch.scores).map(([playerId, strokes]) => ({
+          round_id: id,
+          player_id: playerId,
+          strokes,
+        }));
+        const { error } = await supabase
+          .from("round_scores")
+          .upsert(upserts, { onConflict: "round_id,player_id" });
+        if (error) throw new Error(error.message);
+      }
+      await loadAll();
     };
 
-    const deleteCourse: AppData["deleteCourse"] = (id) => {
-      setCourses((prev) => prev.filter((c) => c.id !== id));
-      setRounds((prev) => prev.filter((r) => r.courseId !== id));
-    };
-
-    const addPlayer: AppData["addPlayer"] = (name, isSelf = false) => {
-      const player: Player = {
-        id: makeId(),
-        name,
-        isSelf,
-        color: nextColor(players),
-        createdAt: new Date().toISOString(),
-      };
-      setPlayers((prev) => [...prev, player]);
-      return player;
-    };
-
-    const updatePlayer: AppData["updatePlayer"] = (id, patch) => {
-      setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-    };
-
-    const deletePlayer: AppData["deletePlayer"] = (id) => {
-      setPlayers((prev) => prev.filter((p) => p.id !== id));
-      setRounds((prev) =>
-        prev
-          .map((r) => {
-            if (!r.playerIds.includes(id)) return r;
-            const { [id]: _removed, ...rest } = r.scores;
-            return { ...r, playerIds: r.playerIds.filter((pid) => pid !== id), scores: rest };
-          })
-          .filter((r) => r.playerIds.length > 0),
-      );
-    };
-
-    const addRound: AppData["addRound"] = (input) => {
-      const round: Round = { ...input, id: makeId(), createdAt: new Date().toISOString() };
-      setRounds((prev) => [...prev, round]);
-      return round;
-    };
-
-    const updateRound: AppData["updateRound"] = (id, patch) => {
-      setRounds((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-    };
-
-    const deleteRound: AppData["deleteRound"] = (id) => {
-      setRounds((prev) => prev.filter((r) => r.id !== id));
+    const deleteRound: AppData["deleteRound"] = async (id) => {
+      const { error } = await supabase.from("rounds").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      await loadAll();
     };
 
     return {
       courses,
       players,
       rounds,
+      loading,
       addCourse,
       updateCourse,
       deleteCourse,
@@ -131,8 +311,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       coursesById: new Map(courses.map((c) => [c.id, c])),
       playersById: new Map(players.map((p) => [p.id, p])),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courses, players, rounds]);
+  }, [courseRows, playerRows, roundRows, scoreRows, loading, selfUserId, loadAll]);
 
   return <AppDataCtx.Provider value={value}>{children}</AppDataCtx.Provider>;
 }

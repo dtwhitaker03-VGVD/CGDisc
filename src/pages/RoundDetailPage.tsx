@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { roundRating, scoreToPar, totalScore } from "../lib/ratings";
@@ -12,6 +12,13 @@ export function RoundDetailPage() {
   const round = useMemo(() => rounds.find((r) => r.id === id), [rounds, id]);
   const course = round ? coursesById.get(round.courseId) : undefined;
 
+  // Edited locally first, committed on blur, so typing doesn't fight the
+  // network round-trip / realtime refresh on every keystroke.
+  const [draftScores, setDraftScores] = useState(round?.scores ?? {});
+  useEffect(() => {
+    if (round) setDraftScores(round.scores);
+  }, [round]);
+
   if (!round || !course) {
     return (
       <div>
@@ -20,16 +27,24 @@ export function RoundDetailPage() {
     );
   }
 
-  function setScore(playerId: string, holeIndex: number, value: number) {
-    if (!round) return;
-    const updated = round.scores[playerId].map((s, i) => (i === holeIndex ? Math.max(1, value) : s));
-    updateRound(round.id, { scores: { ...round.scores, [playerId]: updated } });
+  function setDraftScore(playerId: string, holeIndex: number, value: number) {
+    setDraftScores((prev) => ({
+      ...prev,
+      [playerId]: prev[playerId].map((s, i) => (i === holeIndex ? Math.max(1, value) : s)),
+    }));
   }
 
-  function handleDelete() {
+  function commitScore(playerId: string) {
+    if (!round) return;
+    if (draftScores[playerId] !== round.scores[playerId]) {
+      void updateRound(round.id, { scores: { [playerId]: draftScores[playerId] } });
+    }
+  }
+
+  async function handleDelete() {
     if (!round) return;
     if (confirm("Delete this round? This can't be undone.")) {
-      deleteRound(round.id);
+      await deleteRound(round.id);
       navigate("/rounds");
     }
   }
@@ -41,7 +56,7 @@ export function RoundDetailPage() {
       <div className="grid grid-cols-2 gap-2 mb-4">
         {round.playerIds.map((pid) => {
           const player = playersById.get(pid);
-          const strokes = round.scores[pid];
+          const strokes = draftScores[pid];
           if (!player || !strokes) return null;
           const rel = scoreToPar(strokes, course);
           return (
@@ -88,8 +103,9 @@ export function RoundDetailPage() {
                     <input
                       type="number"
                       className="w-12 rounded-lg border border-slate-200 text-center py-1"
-                      value={round.scores[pid]?.[i] ?? hole.par}
-                      onChange={(e) => setScore(pid, i, Number(e.target.value) || hole.par)}
+                      value={draftScores[pid]?.[i] ?? hole.par}
+                      onChange={(e) => setDraftScore(pid, i, Number(e.target.value) || hole.par)}
+                      onBlur={() => commitScore(pid)}
                     />
                   </td>
                 ))}

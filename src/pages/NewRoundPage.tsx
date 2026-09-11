@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { scoreToPar } from "../lib/ratings";
@@ -15,13 +15,22 @@ export function NewRoundPage() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [courseId, setCourseId] = useState<string | null>(null);
-  const [playerIds, setPlayerIds] = useState<string[]>(
-    players.filter((p) => p.isSelf).map((p) => p.id),
-  );
+  const [playerIds, setPlayerIds] = useState<string[]>([]);
   const [newFriendName, setNewFriendName] = useState("");
   const [date, setDate] = useState(todayIso());
   const [scores, setScores] = useState<Record<string, number[]>>({});
   const [activeHoleIndex, setActiveHoleIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const preselectedSelf = useRef(false);
+  useEffect(() => {
+    if (preselectedSelf.current) return;
+    const self = players.find((p) => p.isSelf);
+    if (self) {
+      setPlayerIds((prev) => (prev.includes(self.id) ? prev : [...prev, self.id]));
+      preselectedSelf.current = true;
+    }
+  }, [players]);
 
   const course = useMemo(() => courses.find((c) => c.id === courseId) ?? null, [courses, courseId]);
 
@@ -29,9 +38,9 @@ export function NewRoundPage() {
     setPlayerIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   }
 
-  function handleAddFriend() {
+  async function handleAddFriend() {
     if (!newFriendName.trim()) return;
-    const player = addPlayer(newFriendName.trim());
+    const player = await addPlayer(newFriendName.trim());
     setPlayerIds((prev) => [...prev, player.id]);
     setNewFriendName("");
   }
@@ -54,10 +63,15 @@ export function NewRoundPage() {
     }));
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!course) return;
-    const round = addRound({ courseId: course.id, date, playerIds, scores });
-    navigate(`/round/${round.id}`);
+    setSaving(true);
+    try {
+      const round = await addRound({ courseId: course.id, date, playerIds, scores });
+      navigate(`/round/${round.id}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (courses.length === 0) {
@@ -247,9 +261,10 @@ export function NewRoundPage() {
         </Button>
         <Button
           className="flex-1"
+          disabled={isLastHole && saving}
           onClick={() => (isLastHole ? handleSave() : goToHole(activeHoleIndex + 1))}
         >
-          {isLastHole ? "Save round" : "Next hole"}
+          {isLastHole ? (saving ? "Saving…" : "Save round") : "Next hole"}
         </Button>
       </div>
     </div>

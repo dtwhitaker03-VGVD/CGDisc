@@ -7,35 +7,43 @@ import { Button, Card, EmptyState, Field, PageHeader, inputClass } from "../comp
 export function PlayersPage() {
   const { players, rounds, coursesById, addPlayer, deletePlayer } = useAppData();
   const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const hasSelf = players.some((p) => p.isSelf);
-
-  function handleAdd(isSelf: boolean) {
+  async function handleAdd() {
     if (!name.trim()) return;
-    addPlayer(name.trim(), isSelf);
-    setName("");
+    setBusy(true);
+    try {
+      await addPlayer(name.trim());
+      setName("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div>
-      <PageHeader title="Players" subtitle="Yourself and the friends you play with" />
+      <PageHeader title="Players" subtitle="Everyone you play with, shared across all your phones" />
 
       <Card className="mb-4 space-y-3">
-        <Field label={hasSelf ? "Add a friend" : "Add yourself first"}>
+        <Field label="Add a guest friend (no account needed)">
           <input
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={hasSelf ? "Friend's name" : "Your name"}
+            placeholder="Friend's name"
           />
         </Field>
-        <Button className="w-full" disabled={!name.trim()} onClick={() => handleAdd(!hasSelf)}>
-          {hasSelf ? "Add friend" : "That's me"}
+        <Button className="w-full" disabled={!name.trim() || busy} onClick={handleAdd}>
+          Add friend
         </Button>
+        <p className="text-xs text-slate-400">
+          A friend who wants their own login (so their rounds sync to their own phone) should
+          create their own account instead of being added here.
+        </p>
       </Card>
 
       {players.length === 0 ? (
-        <EmptyState icon="👥" title="No players yet" subtitle="Add yourself to get started." />
+        <EmptyState icon="👥" title="No players yet" />
       ) : (
         <div className="space-y-2">
           {players.map((player) => {
@@ -50,7 +58,7 @@ export function PlayersPage() {
                   <div>
                     <p className="font-medium text-slate-800">
                       {player.name}
-                      {player.isSelf ? " (you)" : ""}
+                      {player.isSelf ? " (you)" : !player.hasAccount ? " (guest)" : ""}
                     </p>
                     <p className="text-xs text-slate-400">
                       Handicap {handicap === null ? "— (needs 3+ rounds)" : handicap}
@@ -61,15 +69,17 @@ export function PlayersPage() {
                   <Link to={`/stats/${player.id}`} className="text-sm font-medium text-green-700">
                     Stats
                   </Link>
-                  <button
-                    type="button"
-                    className="text-sm text-red-600"
-                    onClick={() => {
-                      if (confirm(`Remove ${player.name}?`)) deletePlayer(player.id);
-                    }}
-                  >
-                    Remove
-                  </button>
+                  {!player.hasAccount && (
+                    <button
+                      type="button"
+                      className="text-sm text-red-600"
+                      onClick={() => {
+                        if (confirm(`Remove ${player.name}?`)) void deletePlayer(player.id);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </Card>
             );

@@ -6,28 +6,57 @@ handicaps with them.
 
 ## Features
 
-- **Courses** — add your local courses with per-hole par (9, 18, or custom hole counts).
+- **Accounts, shared across devices** — sign up with email/password; you and
+  your friends each log in from your own phones and see the same courses,
+  rounds, and handicaps, synced live via Supabase.
+- **Courses** — local Cape Girardeau-area courses are pre-loaded; add more
+  with per-hole par (9, 18, or custom hole counts) and distance.
 - **New round** — a phone-friendly 3-step flow: pick a course, pick who's
-  playing (including quick-add for new friends), then enter scores per hole
-  with big tap-friendly +/- steppers.
+  playing (including quick-add for guest friends who don't want an account),
+  then enter scores hole-by-hole with big tap-friendly +/- steppers.
 - **Ratings** — every round gets an estimated rating, self-consistent per
   course and tunable via each course's "rating basis" and "points per throw".
 - **Handicaps** — a running handicap per player, computed from their best
   recent differentials (score vs. each course's rating basis), so handicaps
   stay comparable across courses.
 - **Friends leaderboard** — see how everyone's handicap stacks up.
-- Installable as a Progressive Web App (works offline, add to your phone's
-  home screen — no app store needed).
+- Installable as a Progressive Web App (add to your phone's home screen —
+  no app store needed). The app shell works offline, but signing in and
+  syncing rounds needs a connection.
 
 See the in-app "How ratings work" page (Stats tab) for the exact formulas.
 
-All data (courses, players, rounds) is stored locally in the browser — there
-is no backend or account system.
+## Backend: Supabase
+
+Courses, players, and rounds live in a shared Supabase (Postgres) project —
+not local device storage — so everyone signed in sees the same data. Row
+Level Security is used with a simple "any signed-in user can read/write
+everything" policy, which fits a small group of friends who trust each
+other; it is **not** meant for a public, multi-tenant app.
+
+### One-time project setup
+
+1. Create a new Supabase project (a dedicated one for this app, not shared
+   with another project's database).
+2. Open the SQL Editor and run the contents of [`supabase/schema.sql`](supabase/schema.sql).
+   It creates the tables, security policies, a trigger that auto-creates a
+   player profile whenever someone signs up, enables realtime sync, and
+   seeds the local courses. It's safe to re-run.
+3. From Settings > API, copy the **Project URL** and the **anon / public**
+   key (never the `service_role` key) into `.env` (copy `.env.example`).
+   The anon key is designed to be public client-side — Supabase's own docs
+   say to embed it in browser apps — since access is enforced by the RLS
+   policies from step 2, not by keeping the key secret. That's also why it's
+   safe to commit `.env` for this project.
+4. By default Supabase requires confirming a new account's email before it
+   can sign in. For a quick "just my friends" setup you can turn that off
+   under Authentication > Sign In / Providers > Email > "Confirm email".
 
 ## Development
 
 ```bash
 npm install
+cp .env.example .env   # fill in your Supabase URL + anon key
 npm run dev
 ```
 
