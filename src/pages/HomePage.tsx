@@ -3,6 +3,7 @@ import { useAppData } from "../store/AppDataContext";
 import { useAuth } from "../store/AuthContext";
 import { computeHandicap, playerDifferentials, roundRating, scoreToPar } from "../lib/ratings";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
+import { LegacyImportCard } from "../components/LegacyImportCard";
 
 export function HomePage() {
   const { players, rounds, courses, coursesById } = useAppData();
@@ -39,6 +40,8 @@ export function HomePage() {
           </button>
         }
       />
+
+      <LegacyImportCard />
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <LinkButton to="/round/new">🥏 New round</LinkButton>
