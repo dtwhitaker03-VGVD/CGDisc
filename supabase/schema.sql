@@ -40,8 +40,21 @@ create table if not exists public.rounds (
   date date not null,
   notes text,
   created_by uuid references public.players (id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Handicap allowances, if any, are locked in from each player's handicap
+  -- at round start (relative to the lowest in the group) so they don't
+  -- shift retroactively as handicaps change later.
+  handicapped boolean not null default false,
+  handicap_allowances jsonb, -- { "<playerId>": <bonus strokes>, ... }
+  -- Team rounds: playerId -> team index (0-based). Team rounds are excluded
+  -- from handicap/rating calculations entirely (see playerDifferentials).
+  team_assignments jsonb
 );
+
+alter table public.rounds
+  add column if not exists handicapped boolean not null default false,
+  add column if not exists handicap_allowances jsonb,
+  add column if not exists team_assignments jsonb;
 
 -- One row per player per round; strokes is the per-hole score array, same
 -- order as the course's holes at the time the round was played.

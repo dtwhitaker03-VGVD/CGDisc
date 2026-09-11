@@ -13,7 +13,15 @@ handicaps with them.
   with per-hole par (9, 18, or custom hole counts) and distance.
 - **New round** — a phone-friendly 3-step flow: pick a course, pick who's
   playing (including quick-add for guest friends who don't want an account),
-  then enter scores hole-by-hole with big tap-friendly +/- steppers.
+  then enter scores hole-by-hole with big tap-friendly +/- steppers. Three
+  round types:
+  - **Straight up** — individual scores, counts toward everyone's handicap.
+  - **Handicapped** — once everyone playing has a handicap (3+ rounds each),
+    each player gets bonus strokes relative to the group's best handicap,
+    with a live net leaderboard as scores come in.
+  - **Team** — group players into 2+ teams with a live team-total
+    leaderboard; scores are entered per player as usual but don't count
+    toward anyone's individual handicap or rating.
 - **Ratings** — every round gets an estimated rating, self-consistent per
   course and tunable via each course's "rating basis" and "points per throw".
 - **Handicaps** — a running handicap per player, computed from their best

@@ -71,6 +71,24 @@ export function computeHandicap(differentials: Differential[]): number | null {
   return Math.round(avg * 10) / 10;
 }
 
+/**
+ * Converts each player's handicap into bonus strokes for a head-to-head
+ * round: the lowest handicap in the group plays scratch (0 strokes), and
+ * everyone else gets the gap to that player, rounded to a whole stroke.
+ * Strokes are applied evenly to the round total rather than allocated to
+ * specific holes (this app doesn't track a per-hole difficulty ranking).
+ */
+export function computeHandicapAllowances(
+  handicaps: Record<string, number>,
+): Record<string, number> {
+  const values = Object.values(handicaps);
+  if (values.length === 0) return {};
+  const lowest = Math.min(...values);
+  return Object.fromEntries(
+    Object.entries(handicaps).map(([playerId, h]) => [playerId, Math.round(h - lowest)]),
+  );
+}
+
 export function playerDifferentials(
   playerId: string,
   rounds: Round[],
@@ -78,6 +96,7 @@ export function playerDifferentials(
 ): Differential[] {
   const out: Differential[] = [];
   for (const round of rounds) {
+    if (round.teamAssignments) continue; // team rounds don't count toward handicap/rating
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!strokes || !course || strokes.length === 0) continue;

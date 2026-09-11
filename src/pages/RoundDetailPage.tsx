@@ -51,7 +51,97 @@ export function RoundDetailPage() {
 
   return (
     <div>
-      <PageHeader title={course.name} subtitle={round.date} />
+      <PageHeader
+        title={course.name}
+        subtitle={round.date}
+        action={
+          round.handicapped ? (
+            <span className="text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2.5 py-1">
+              Handicapped
+            </span>
+          ) : round.teamAssignments ? (
+            <span className="text-xs font-semibold text-blue-700 bg-blue-100 rounded-full px-2.5 py-1">
+              Team round
+            </span>
+          ) : undefined
+        }
+      />
+
+      {round.handicapped && round.handicapAllowances && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Net results
+          </p>
+          <div className="space-y-1.5">
+            {round.playerIds
+              .map((pid) => {
+                const player = playersById.get(pid);
+                const strokes = draftScores[pid];
+                if (!player || !strokes) return null;
+                const gross = totalScore(strokes);
+                const allowance = round.handicapAllowances?.[pid] ?? 0;
+                return { pid, player, gross, allowance, net: gross - allowance };
+              })
+              .filter((row): row is NonNullable<typeof row> => Boolean(row))
+              .sort((a, b) => a.net - b.net)
+              .map((row, i) => (
+                <div key={row.pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: row.player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{row.player.name}</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500">
+                    {row.gross} − {row.allowance} ={" "}
+                    <span className="font-semibold text-slate-900">{row.net}</span>
+                  </span>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
+
+      {round.teamAssignments && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Team results
+          </p>
+          <div className="space-y-2">
+            {Object.entries(
+              round.playerIds.reduce<Record<number, string[]>>((acc, pid) => {
+                const teamIndex = round.teamAssignments?.[pid] ?? 0;
+                (acc[teamIndex] ??= []).push(pid);
+                return acc;
+              }, {}),
+            )
+              .map(([teamIndex, pids]) => ({
+                teamIndex: Number(teamIndex),
+                members: pids
+                  .map((pid) => playersById.get(pid))
+                  .filter((p): p is NonNullable<typeof p> => Boolean(p)),
+                total: pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0),
+              }))
+              .sort((a, b) => a.total - b.total)
+              .map((team, i) => (
+                <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span className="font-medium text-slate-800">
+                      Team {team.teamIndex + 1}{" "}
+                      <span className="text-xs text-slate-400 font-normal">
+                        ({team.members.map((m) => m.name).join(", ")})
+                      </span>
+                    </span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">{team.total}</span>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-2 mb-4">
         {round.playerIds.map((pid) => {
@@ -70,7 +160,9 @@ export function RoundDetailPage() {
                   ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                 </span>
               </p>
-              <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
+              {!round.teamAssignments && (
+                <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
+              )}
             </Card>
           );
         })}
