@@ -13,6 +13,8 @@ export interface Course {
   ratingBasis: number;
   /** Estimated rating points gained/lost per throw relative to ratingBasis. */
   pointsPerThrow: number;
+  /** Optional hole-layout map image (a full URL, or a path relative to the app's own origin). */
+  mapImageUrl?: string;
   createdAt: string;
 }
 

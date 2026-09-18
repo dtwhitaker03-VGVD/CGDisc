@@ -31,8 +31,14 @@ create table if not exists public.courses (
   holes jsonb not null, -- [{ "number": 1, "par": 3, "distanceFt": 209 }, ...]
   rating_basis integer not null,
   points_per_throw numeric not null default 10,
+  -- Optional hole-layout map image: a full URL, or a path relative to the
+  -- app's own origin (e.g. an image bundled under public/ in the repo).
+  map_image_url text,
   created_at timestamptz not null default now()
 );
+
+alter table public.courses
+  add column if not exists map_image_url text;
 
 create table if not exists public.rounds (
   id uuid primary key default gen_random_uuid(),
@@ -186,7 +192,7 @@ end $$;
 -- course with the same name already exists)
 -- ---------------------------------------------------------------------------
 
-insert into public.courses (name, location, holes, rating_basis, points_per_throw)
+insert into public.courses (name, location, holes, rating_basis, points_per_throw, map_image_url)
 select * from (values
   (
     'Capaha Park',
@@ -198,7 +204,7 @@ select * from (values
       {"number":7,"par":3,"distanceFt":226},{"number":8,"par":3,"distanceFt":207},
       {"number":9,"par":3,"distanceFt":260}
     ]'::jsonb,
-    27, 10
+    27, 10, null
   ),
   (
     'Cape County Park North',
@@ -214,7 +220,7 @@ select * from (values
       {"number":15,"par":3,"distanceFt":304},{"number":16,"par":3,"distanceFt":293},
       {"number":17,"par":3,"distanceFt":280},{"number":18,"par":4,"distanceFt":507}
     ]'::jsonb,
-    55, 10
+    55, 10, null
   ),
   (
     'Litz Park',
@@ -230,7 +236,7 @@ select * from (values
       {"number":15,"par":4,"distanceFt":488},{"number":16,"par":3,"distanceFt":290},
       {"number":17,"par":3,"distanceFt":282},{"number":18,"par":4,"distanceFt":547}
     ]'::jsonb,
-    59, 10
+    59, 10, 'course-maps/litz-park.webp'
   ),
   (
     'Scott City Park',
@@ -246,9 +252,9 @@ select * from (values
       {"number":15,"par":3,"distanceFt":262},{"number":16,"par":3,"distanceFt":212},
       {"number":17,"par":3,"distanceFt":297},{"number":18,"par":3,"distanceFt":282}
     ]'::jsonb,
-    56, 10
+    56, 10, null
   )
-) as seed(name, location, holes, rating_basis, points_per_throw)
+) as seed(name, location, holes, rating_basis, points_per_throw, map_image_url)
 where not exists (
   select 1 from public.courses c where c.name = seed.name
 );
