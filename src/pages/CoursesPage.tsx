@@ -31,8 +31,8 @@ export function CoursesPage() {
       ) : (
         <div className="space-y-3">
           {courses.map((course) => (
-            <Link key={course.id} to={`/courses/${course.id}`} className="block">
-              <Card>
+            <Card key={course.id} className="flex items-start justify-between gap-3">
+              <Link to={`/courses/${course.id}`} className="block flex-1 min-w-0">
                 <p className="font-semibold text-slate-900">{course.name}</p>
                 {course.location && (
                   <p className="text-sm text-slate-500">{course.location}</p>
@@ -44,8 +44,19 @@ export function CoursesPage() {
                       .reduce((s, h) => s + (h.distanceFt ?? 0), 0)
                       .toLocaleString()} ft`}
                 </p>
-              </Card>
-            </Link>
+              </Link>
+              {course.mapImageUrl && (
+                <a
+                  href={course.mapImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 flex flex-col items-center gap-0.5 text-green-700"
+                >
+                  <span className="text-xl leading-none">🗺️</span>
+                  <span className="text-[11px] font-medium">Map</span>
+                </a>
+              )}
+            </Card>
           ))}
         </div>
       )}

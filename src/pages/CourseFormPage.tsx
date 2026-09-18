@@ -31,6 +31,7 @@ export function CourseFormPage() {
   );
   const [ratingBasisTouched, setRatingBasisTouched] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [mapImageUrl, setMapImageUrl] = useState(existing?.mapImageUrl ?? "");
 
   const totalPar = holes.reduce((s, h) => s + h.par, 0);
 
@@ -70,6 +71,7 @@ export function CourseFormPage() {
           holes,
           pointsPerThrow,
           ratingBasis,
+          mapImageUrl: mapImageUrl.trim() || undefined,
         });
       } else {
         const course = await addCourse({
@@ -77,7 +79,11 @@ export function CourseFormPage() {
           location: location.trim() || undefined,
           holes,
         });
-        await updateCourse(course.id, { pointsPerThrow, ratingBasis });
+        await updateCourse(course.id, {
+          pointsPerThrow,
+          ratingBasis,
+          mapImageUrl: mapImageUrl.trim() || undefined,
+        });
       }
       navigate("/courses");
     } finally {
@@ -183,6 +189,27 @@ export function CourseFormPage() {
               </Fragment>
             ))}
           </div>
+        </Card>
+
+        <Card className="space-y-3">
+          <Field label="Course map image URL (optional)">
+            <input
+              className={inputClass}
+              value={mapImageUrl}
+              onChange={(e) => setMapImageUrl(e.target.value)}
+              placeholder="e.g. course-maps/my-course.jpg or https://..."
+            />
+          </Field>
+          {mapImageUrl.trim() && (
+            <a href={mapImageUrl.trim()} target="_blank" rel="noopener noreferrer" className="block">
+              <img
+                src={mapImageUrl.trim()}
+                alt={`${name || "Course"} map`}
+                className="w-full max-h-48 object-cover rounded-xl border border-slate-200"
+              />
+              <p className="text-xs text-green-700 font-medium mt-1">Tap to view full size</p>
+            </a>
+          )}
         </Card>
 
         <button
