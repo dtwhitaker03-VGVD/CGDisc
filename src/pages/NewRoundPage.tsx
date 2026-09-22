@@ -160,19 +160,28 @@ export function NewRoundPage() {
         <PageHeader title="New round" subtitle="Step 1 of 3 · Choose a course" />
         <div className="space-y-2 mb-4">
           {courses.map((c) => (
-            <button
+            <Card
               key={c.id}
-              type="button"
-              onClick={() => setCourseId(c.id)}
-              className="block w-full text-left"
+              className={`flex items-center justify-between gap-3 ${
+                courseId === c.id ? "border-green-600 ring-2 ring-green-100" : ""
+              }`}
             >
-              <Card
-                className={courseId === c.id ? "border-green-600 ring-2 ring-green-100" : ""}
-              >
+              <button type="button" onClick={() => setCourseId(c.id)} className="flex-1 text-left">
                 <p className="font-semibold text-slate-900">{c.name}</p>
                 <p className="text-sm text-slate-400">{c.holes.length} holes</p>
-              </Card>
-            </button>
+              </button>
+              {c.mapImageUrl && (
+                <a
+                  href={c.mapImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 flex flex-col items-center gap-0.5 text-green-700"
+                >
+                  <span className="text-xl leading-none">🗺️</span>
+                  <span className="text-[11px] font-medium">Map</span>
+                </a>
+              )}
+            </Card>
           ))}
         </div>
         <Button className="w-full" disabled={!courseId} onClick={() => setStep(2)}>

@@ -30,6 +30,7 @@ interface CourseRow {
   holes: Hole[];
   rating_basis: number;
   points_per_throw: number;
+  map_image_url: string | null;
   created_at: string;
 }
 
@@ -66,6 +67,7 @@ function mapCourse(row: CourseRow): Course {
     holes: row.holes,
     ratingBasis: row.rating_basis,
     pointsPerThrow: row.points_per_throw,
+    mapImageUrl: row.map_image_url ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -200,6 +202,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (patch.holes !== undefined) dbPatch.holes = patch.holes;
       if (patch.ratingBasis !== undefined) dbPatch.rating_basis = patch.ratingBasis;
       if (patch.pointsPerThrow !== undefined) dbPatch.points_per_throw = patch.pointsPerThrow;
+      if (patch.mapImageUrl !== undefined) dbPatch.map_image_url = patch.mapImageUrl ?? null;
       const { error } = await supabase.from("courses").update(dbPatch).eq("id", id);
       if (error) throw new Error(error.message);
       await loadAll();
