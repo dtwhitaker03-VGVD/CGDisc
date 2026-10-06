@@ -223,6 +223,22 @@ select * from (values
     55, 10, null
   ),
   (
+    'Kiwanis Park',
+    'Cape Girardeau, MO',
+    '[
+      {"number":1,"par":3,"distanceFt":169},{"number":2,"par":3,"distanceFt":197},
+      {"number":3,"par":4,"distanceFt":530},{"number":4,"par":4,"distanceFt":569},
+      {"number":5,"par":3,"distanceFt":177},{"number":6,"par":3,"distanceFt":281},
+      {"number":7,"par":3,"distanceFt":318},{"number":8,"par":3,"distanceFt":188},
+      {"number":9,"par":3,"distanceFt":355},{"number":10,"par":3,"distanceFt":251},
+      {"number":11,"par":3,"distanceFt":270},{"number":12,"par":3,"distanceFt":321},
+      {"number":13,"par":3,"distanceFt":214},{"number":14,"par":4,"distanceFt":459},
+      {"number":15,"par":3,"distanceFt":264},{"number":16,"par":3,"distanceFt":294},
+      {"number":17,"par":3,"distanceFt":155},{"number":18,"par":3,"distanceFt":259}
+    ]'::jsonb,
+    57, 10, 'course-maps/kiwanis-park.webp'
+  ),
+  (
     'Litz Park',
     'Jackson, MO',
     '[
