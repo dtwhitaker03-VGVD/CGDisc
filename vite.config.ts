@@ -33,10 +33,15 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
-        // Course map images (public/course-maps/*) are opened as direct
-        // full-page navigations (<a target="_blank">). Without this, the
-        // SPA's navigate-fallback intercepts that navigation and serves
-        // index.html instead of the image, showing a blank app shell.
+        // Course map images (public/course-maps/*) are large reference
+        // images, not core app-shell assets -- exclude them from the
+        // install-time precache regardless of extension (some are .png,
+        // which would otherwise match globPatterns above).
+        globIgnores: ['course-maps/**'],
+        // They're also opened as direct full-page navigations
+        // (<a target="_blank">). Without this, the SPA's navigate-fallback
+        // intercepts that navigation and serves index.html instead of the
+        // image, showing a blank app shell.
         navigateFallbackDenylist: [/\/course-maps\//],
       },
     }),

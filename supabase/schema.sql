@@ -204,7 +204,7 @@ select * from (values
       {"number":7,"par":3,"distanceFt":226},{"number":8,"par":3,"distanceFt":207},
       {"number":9,"par":3,"distanceFt":260}
     ]'::jsonb,
-    27, 10, null
+    27, 10, 'course-maps/capaha-park.png'
   ),
   (
     'Cape County Park North',
@@ -220,7 +220,7 @@ select * from (values
       {"number":15,"par":3,"distanceFt":304},{"number":16,"par":3,"distanceFt":293},
       {"number":17,"par":3,"distanceFt":280},{"number":18,"par":4,"distanceFt":507}
     ]'::jsonb,
-    55, 10, null
+    55, 10, 'course-maps/cape-county-park-north.webp'
   ),
   (
     'Kiwanis Park',
@@ -268,7 +268,7 @@ select * from (values
       {"number":15,"par":3,"distanceFt":262},{"number":16,"par":3,"distanceFt":212},
       {"number":17,"par":3,"distanceFt":297},{"number":18,"par":3,"distanceFt":282}
     ]'::jsonb,
-    56, 10, null
+    56, 10, 'course-maps/scott-city-park.png'
   )
 ) as seed(name, location, holes, rating_basis, points_per_throw, map_image_url)
 where not exists (
