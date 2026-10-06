@@ -15,6 +15,48 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Persist in-progress round state locally so closing or reloading the app
+// mid-round (accidentally or on purpose) doesn't lose it -- it's only ever
+// saved to Supabase once the round is actually finished.
+const DRAFT_STORAGE_KEY = "cgdisc:new-round-draft";
+
+interface RoundDraft {
+  step: 1 | 2 | 3;
+  courseId: string | null;
+  playerIds: string[];
+  date: string;
+  scores: Record<string, number[]>;
+  activeHoleIndex: number;
+  roundMode: "straight" | "handicapped" | "team";
+  teamOf: Record<string, number>;
+  teamCount: number;
+}
+
+function loadDraft(): RoundDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as RoundDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: RoundDraft) {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // ignore (e.g. private browsing storage limits)
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function NewRoundPage() {
   const navigate = useNavigate();
   const { courses, players, rounds, coursesById, addPlayer, addRound } = useAppData();
@@ -30,6 +72,52 @@ export function NewRoundPage() {
   const [roundMode, setRoundMode] = useState<"straight" | "handicapped" | "team">("straight");
   const [teamOf, setTeamOf] = useState<Record<string, number>>({});
   const [teamCount, setTeamCount] = useState(2);
+
+  const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
+    const draft = loadDraft();
+    if (draft && courses.some((c) => c.id === draft.courseId)) return draft;
+    if (draft) clearDraft();
+    return null;
+  });
+
+  function resumeDraft() {
+    if (!pendingDraft) return;
+    const validPlayerIds = pendingDraft.playerIds.filter((pid) => players.some((p) => p.id === pid));
+    setCourseId(pendingDraft.courseId);
+    setPlayerIds(validPlayerIds);
+    setDate(pendingDraft.date);
+    setScores(pendingDraft.scores);
+    setActiveHoleIndex(pendingDraft.activeHoleIndex);
+    setRoundMode(pendingDraft.roundMode);
+    setTeamOf(pendingDraft.teamOf);
+    setTeamCount(pendingDraft.teamCount);
+    setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
+    setPendingDraft(null);
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setPendingDraft(null);
+  }
+
+  function discardRound() {
+    clearDraft();
+    setStep(1);
+    setCourseId(null);
+    setPlayerIds([]);
+    setScores({});
+    setActiveHoleIndex(0);
+    setRoundMode("straight");
+    setTeamOf({});
+    setTeamCount(2);
+  }
+
+  // Once the draft prompt (if any) is resolved, keep saving progress as the
+  // round is played so it survives a reload.
+  useEffect(() => {
+    if (pendingDraft || !courseId) return;
+    saveDraft({ step, courseId, playerIds, date, scores, activeHoleIndex, roundMode, teamOf, teamCount });
+  }, [pendingDraft, step, courseId, playerIds, date, scores, activeHoleIndex, roundMode, teamOf, teamCount]);
 
   const preselectedSelf = useRef(false);
   useEffect(() => {
@@ -134,10 +222,36 @@ export function NewRoundPage() {
           ? Object.fromEntries(playerIds.map((pid) => [pid, teamOf[pid] ?? 0]))
           : undefined,
       });
+      clearDraft();
       navigate(`/round/${round.id}`);
     } finally {
       setSaving(false);
     }
+  }
+
+  if (pendingDraft) {
+    const draft = pendingDraft;
+    const draftCourse = courses.find((c) => c.id === draft.courseId);
+    return (
+      <div>
+        <PageHeader title="Round in progress" />
+        <Card className="space-y-3">
+          <p className="text-slate-700">
+            You have an unfinished round at{" "}
+            <span className="font-semibold">{draftCourse?.name ?? "a course"}</span>
+            {draft.step === 3 && ` (hole ${draft.activeHoleIndex + 1} of ${draftCourse?.holes.length ?? "?"})`}.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={discardDraft}>
+              Start new round instead
+            </Button>
+            <Button className="flex-1" onClick={resumeDraft}>
+              Continue round
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   if (courses.length === 0) {
@@ -364,6 +478,13 @@ export function NewRoundPage() {
             Next: scores
           </Button>
         </div>
+        <button
+          type="button"
+          className="text-sm font-medium text-slate-400 mt-3 block mx-auto"
+          onClick={discardRound}
+        >
+          Discard round
+        </button>
       </div>
     );
   }
@@ -539,6 +660,13 @@ export function NewRoundPage() {
           {isLastHole ? (saving ? "Saving…" : "Save round") : "Next hole"}
         </Button>
       </div>
+      <button
+        type="button"
+        className="text-sm font-medium text-slate-400 mt-3 block mx-auto"
+        onClick={discardRound}
+      >
+        Discard round
+      </button>
     </div>
   );
 }
