@@ -33,6 +33,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        // Course map images (public/course-maps/*) are opened as direct
+        // full-page navigations (<a target="_blank">). Without this, the
+        // SPA's navigate-fallback intercepts that navigation and serves
+        // index.html instead of the image, showing a blank app shell.
+        navigateFallbackDenylist: [/\/course-maps\//],
       },
     }),
   ],
