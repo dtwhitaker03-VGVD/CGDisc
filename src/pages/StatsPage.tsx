@@ -70,7 +70,7 @@ export function StatsPage() {
                           <>
                             <span className="text-green-600">{stats.low}</span>
                             {" / "}
-                            <span className="text-amber-600">{stats.average}</span>
+                            <span className="text-slate-900">{stats.average}</span>
                             {" / "}
                             <span className="text-red-600">{stats.high}</span>
                           </>

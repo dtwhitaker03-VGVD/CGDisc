@@ -54,7 +54,7 @@ export function CoursesPage() {
                     <>
                       <span className="text-green-600 font-semibold">{stats.low}</span>
                       {" / "}
-                      <span className="text-amber-600 font-semibold">{stats.average}</span>
+                      <span className="text-slate-900 font-semibold">{stats.average}</span>
                       {" / "}
                       <span className="text-red-600 font-semibold">{stats.high}</span>
                     </>
