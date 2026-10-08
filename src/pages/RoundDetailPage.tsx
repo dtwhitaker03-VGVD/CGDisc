@@ -12,6 +12,10 @@ export function RoundDetailPage() {
   const round = useMemo(() => rounds.find((r) => r.id === id), [rounds, id]);
   const course = round ? coursesById.get(round.courseId) : undefined;
 
+  // Rounds are locked by default once finalized -- "Edit round" opts back
+  // into the editable scorecard below so scores aren't changed by a stray tap.
+  const [editing, setEditing] = useState(false);
+
   // Edited locally first, committed on blur, so typing doesn't fight the
   // network round-trip / realtime refresh on every keystroke.
   const [draftScores, setDraftScores] = useState(round?.scores ?? {});
@@ -190,26 +194,43 @@ export function RoundDetailPage() {
                     {hole.distanceFt ? `, ${hole.distanceFt}ft` : ""})
                   </span>
                 </td>
-                {round.playerIds.map((pid) => (
-                  <td key={pid} className="px-1 py-1.5 text-center">
-                    <input
-                      type="number"
-                      className="w-12 rounded-lg border border-slate-200 text-center py-1"
-                      value={draftScores[pid]?.[i] ?? hole.par}
-                      onChange={(e) => setDraftScore(pid, i, Number(e.target.value) || hole.par)}
-                      onBlur={() => commitScore(pid)}
-                    />
-                  </td>
-                ))}
+                {round.playerIds.map((pid) =>
+                  editing ? (
+                    <td key={pid} className="px-1 py-1.5 text-center">
+                      <input
+                        type="number"
+                        className="w-12 rounded-lg border border-slate-200 text-center py-1"
+                        value={draftScores[pid]?.[i] ?? hole.par}
+                        onChange={(e) => setDraftScore(pid, i, Number(e.target.value) || hole.par)}
+                        onBlur={() => commitScore(pid)}
+                      />
+                    </td>
+                  ) : (
+                    <td key={pid} className="px-1 py-1.5 text-center tabular-nums">
+                      {draftScores[pid]?.[i] ?? hole.par}
+                    </td>
+                  ),
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
 
-      <Button variant="danger" className="w-full" onClick={handleDelete}>
-        Delete round
-      </Button>
+      {editing ? (
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setEditing(false)}>
+            Done editing
+          </Button>
+          <Button variant="danger" className="flex-1" onClick={handleDelete}>
+            Delete round
+          </Button>
+        </div>
+      ) : (
+        <Button variant="secondary" className="w-full" onClick={() => setEditing(true)}>
+          Edit round
+        </Button>
+      )}
     </div>
   );
 }
