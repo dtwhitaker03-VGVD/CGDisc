@@ -192,6 +192,12 @@ end $$;
 -- course with the same name already exists)
 -- ---------------------------------------------------------------------------
 
+-- rating_basis defaults to each course's total par, but is recalibrated to
+-- the group's actual average score once enough rounds are logged on it (see
+-- README/app: Course edit > Show rating settings) -- some courses play a
+-- lot easier or harder than their par suggests, and treating every course's
+-- par as an equal 1000-rating baseline makes cross-course ratings/handicaps
+-- meaningless (e.g. a -4 on an easy course vs. a -4 on a hard one).
 insert into public.courses (name, location, holes, rating_basis, points_per_throw, map_image_url)
 select * from (values
   (
@@ -204,7 +210,7 @@ select * from (values
       {"number":7,"par":3,"distanceFt":226},{"number":8,"par":3,"distanceFt":207},
       {"number":9,"par":3,"distanceFt":260}
     ]'::jsonb,
-    27, 10, 'course-maps/capaha-park.png'
+    24, 10, 'course-maps/capaha-park.png'
   ),
   (
     'Cape County Park North',
@@ -220,7 +226,7 @@ select * from (values
       {"number":15,"par":3,"distanceFt":304},{"number":16,"par":3,"distanceFt":293},
       {"number":17,"par":3,"distanceFt":280},{"number":18,"par":4,"distanceFt":507}
     ]'::jsonb,
-    55, 10, 'course-maps/cape-county-park-north.webp'
+    60, 10, 'course-maps/cape-county-park-north.webp'
   ),
   (
     'Kiwanis Park',
@@ -236,7 +242,7 @@ select * from (values
       {"number":15,"par":3,"distanceFt":264},{"number":16,"par":3,"distanceFt":294},
       {"number":17,"par":3,"distanceFt":155},{"number":18,"par":3,"distanceFt":259}
     ]'::jsonb,
-    57, 10, 'course-maps/kiwanis-park.webp'
+    61, 10, 'course-maps/kiwanis-park.webp'
   ),
   (
     'Litz Park',
@@ -252,7 +258,7 @@ select * from (values
       {"number":15,"par":4,"distanceFt":488},{"number":16,"par":3,"distanceFt":290},
       {"number":17,"par":3,"distanceFt":282},{"number":18,"par":4,"distanceFt":547}
     ]'::jsonb,
-    59, 10, 'course-maps/litz-park.webp'
+    62, 10, 'course-maps/litz-park.webp'
   ),
   (
     'Scott City Park',
