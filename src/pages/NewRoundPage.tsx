@@ -180,6 +180,23 @@ export function NewRoundPage() {
     setPlayerIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
   }
 
+  function adjustTeamCount(delta: number) {
+    const next = Math.max(2, Math.min(6, teamCount + delta));
+    if (next === teamCount) return;
+    setTeamCount(next);
+    if (next < teamCount) {
+      // Reassign anyone on a team index that no longer exists to the last
+      // remaining team, rather than leaving them pointing at a removed one.
+      setTeamOf((prev) => {
+        const updated = { ...prev };
+        for (const pid of Object.keys(updated)) {
+          if ((updated[pid] ?? 0) >= next) updated[pid] = next - 1;
+        }
+        return updated;
+      });
+    }
+  }
+
   async function handleAddFriend() {
     if (!newFriendName.trim()) return;
     const player = await addPlayer(newFriendName.trim());
@@ -414,6 +431,30 @@ export function NewRoundPage() {
                   Scores are entered per player as usual, but won't count toward anyone's
                   handicap or rating.
                 </p>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-slate-700">Number of teams</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjustTeamCount(-1)}
+                      disabled={teamCount <= 2}
+                      className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-semibold disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="text-sm font-semibold tabular-nums w-4 text-center">
+                      {teamCount}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => adjustTeamCount(1)}
+                      disabled={teamCount >= 6}
+                      className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 font-semibold disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {playerIds.map((pid) => {
                     const player = players.find((p) => p.id === pid);
@@ -447,14 +488,6 @@ export function NewRoundPage() {
                     );
                   })}
                 </div>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-green-700 mt-3"
-                  onClick={() => setTeamCount((n) => Math.min(6, n + 1))}
-                  disabled={teamCount >= 6}
-                >
-                  + Add team
-                </button>
               </div>
             )}
           </Card>
