@@ -1,8 +1,22 @@
 import { Link, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
-import { computeHandicap, playerDifferentials, roundRating, scoreToPar, totalScore } from "../lib/ratings";
+import {
+  coursePar,
+  computeHandicap,
+  playerDifferentials,
+  roundRating,
+  scoreToPar,
+  totalScore,
+} from "../lib/ratings";
+import { computeScoreStats, playerTotalsByCourse, type ScoreStats } from "../lib/stats";
 import { RatingChart } from "../components/RatingChart";
 import { Card, PageHeader } from "../components/ui";
+import type { Course } from "../types";
+
+function relToPar(total: number, par: number): string {
+  const rel = total - par;
+  return rel === 0 ? "E" : rel > 0 ? `+${rel}` : `${rel}`;
+}
 
 export function PlayerStatsPage() {
   const { id } = useParams();
@@ -31,6 +45,17 @@ export function PlayerStatsPage() {
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
 
+  const totalsByCourse = playerTotalsByCourse(player.id, rounds);
+  const courseStatRows = [...totalsByCourse.entries()]
+    .map(([courseId, totals]) => {
+      const course = coursesById.get(courseId);
+      const stats = computeScoreStats(totals);
+      if (!course || !stats) return null;
+      return { course, stats };
+    })
+    .filter((row): row is { course: Course; stats: ScoreStats } => Boolean(row))
+    .sort((a, b) => a.course.name.localeCompare(b.course.name));
+
   return (
     <div>
       <PageHeader
@@ -56,6 +81,45 @@ export function PlayerStatsPage() {
           Rating trend
         </p>
         <RatingChart points={chartPoints} color={player.color} />
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          By course (low / avg / high)
+        </p>
+        {courseStatRows.length === 0 ? (
+          <p className="text-sm text-slate-500">No rounds logged yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {courseStatRows.map(({ course, stats }) => {
+              const par = coursePar(course);
+              return (
+                <li key={course.id}>
+                  <Link
+                    to={`/stats/course/${course.id}`}
+                    className="flex items-center justify-between py-2.5"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-800 text-sm">{course.name}</p>
+                      <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
+                    </div>
+                    <p className="text-sm tabular-nums text-right">
+                      <span className="text-green-700 font-semibold">
+                        {stats.low} ({relToPar(stats.low, par)})
+                      </span>
+                      {" / "}
+                      <span className="font-medium">{stats.average}</span>
+                      {" / "}
+                      <span className="text-slate-500">
+                        {stats.high} ({relToPar(stats.high, par)})
+                      </span>
+                    </p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
 
       <Card>

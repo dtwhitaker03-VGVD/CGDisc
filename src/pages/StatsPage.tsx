@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
-import { computeHandicap, playerDifferentials } from "../lib/ratings";
+import { computeHandicap, coursePar, playerDifferentials } from "../lib/ratings";
+import { computeScoreStats, courseTotalsByPlayer } from "../lib/stats";
 import { Card, EmptyState, PageHeader } from "../components/ui";
 
 export function StatsPage() {
-  const { players, rounds, coursesById } = useAppData();
+  const { players, courses, rounds, coursesById } = useAppData();
 
   if (players.length === 0) {
     return (
@@ -43,6 +44,42 @@ export function StatsPage() {
           );
         })}
       </div>
+
+      {courses.length > 0 && (
+        <>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-6 mb-2">
+            Courses
+          </h2>
+          <div className="space-y-2">
+            {courses.map((course) => {
+              const stats = computeScoreStats(
+                [...courseTotalsByPlayer(course.id, rounds).values()].flat(),
+              );
+              return (
+                <Link key={course.id} to={`/stats/course/${course.id}`} className="block">
+                  <Card className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-slate-800">{course.name}</p>
+                      <p className="text-sm text-slate-400">
+                        {course.holes.length} holes · par {coursePar(course)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold tabular-nums">
+                        {stats ? `${stats.low} / ${stats.average} / ${stats.high}` : "—"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {stats ? `${stats.rounds} rounds` : "No rounds yet"}
+                      </p>
+                    </div>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       <p className="text-center text-xs text-slate-400 mt-6">
         <Link to="/about-ratings" className="underline">
           How are ratings & handicaps calculated?
