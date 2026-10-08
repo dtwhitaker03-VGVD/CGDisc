@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { coursePar } from "../lib/ratings";
+import { computeScoreStats, courseTotalsByPlayer } from "../lib/stats";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 
 export function CoursesPage() {
-  const { courses } = useAppData();
+  const { courses, rounds } = useAppData();
 
   return (
     <div>
@@ -30,7 +31,11 @@ export function CoursesPage() {
         />
       ) : (
         <div className="space-y-3">
-          {courses.map((course) => (
+          {courses.map((course) => {
+            const stats = computeScoreStats(
+              [...courseTotalsByPlayer(course.id, rounds).values()].flat(),
+            );
+            return (
             <Card key={course.id} className="flex items-start justify-between gap-3">
               <Link to={`/courses/${course.id}`} className="block flex-1 min-w-0">
                 <p className="font-semibold text-slate-900">{course.name}</p>
@@ -43,6 +48,19 @@ export function CoursesPage() {
                     ` · ${course.holes
                       .reduce((s, h) => s + (h.distanceFt ?? 0), 0)
                       .toLocaleString()} ft`}
+                </p>
+                <p className="text-sm mt-1 tabular-nums">
+                  {stats ? (
+                    <>
+                      <span className="text-green-600 font-semibold">{stats.low}</span>
+                      {" / "}
+                      <span className="text-amber-600 font-semibold">{stats.average}</span>
+                      {" / "}
+                      <span className="text-red-600 font-semibold">{stats.high}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400">No rounds yet</span>
+                  )}
                 </p>
               </Link>
               {course.mapImageUrl && (
@@ -57,7 +75,8 @@ export function CoursesPage() {
                 </a>
               )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

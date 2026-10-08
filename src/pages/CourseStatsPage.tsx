@@ -50,16 +50,16 @@ export function CourseStatsPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-xs text-slate-400">Low</p>
-                <p className="text-xl font-bold text-green-700 tabular-nums">{overall.low}</p>
+                <p className="text-xl font-bold text-green-600 tabular-nums">{overall.low}</p>
                 <p className="text-xs text-slate-400">{relToPar(overall.low, par)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Average</p>
-                <p className="text-xl font-bold tabular-nums">{overall.average}</p>
+                <p className="text-xl font-bold text-amber-600 tabular-nums">{overall.average}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">High</p>
-                <p className="text-xl font-bold text-slate-500 tabular-nums">{overall.high}</p>
+                <p className="text-xl font-bold text-red-600 tabular-nums">{overall.high}</p>
                 <p className="text-xs text-slate-400">{relToPar(overall.high, par)}</p>
               </div>
             </div>
@@ -95,11 +95,11 @@ export function CourseStatsPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm tabular-nums">
-                      <span className="text-green-700 font-semibold">{stats.low}</span>
+                      <span className="text-green-600 font-semibold">{stats.low}</span>
                       {" / "}
-                      <span className="font-medium">{stats.average}</span>
+                      <span className="text-amber-600 font-semibold">{stats.average}</span>
                       {" / "}
-                      <span className="text-slate-500">{stats.high}</span>
+                      <span className="text-red-600 font-semibold">{stats.high}</span>
                     </p>
                     <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
                   </div>
