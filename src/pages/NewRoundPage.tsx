@@ -530,6 +530,17 @@ export function NewRoundPage() {
         .sort((a, b) => a.total - b.total)
     : [];
 
+  // Keep the player list sorted by current standing (lowest score first) so
+  // it's easy to see who's leading while entering scores. Team rounds keep
+  // selection order since they already have a team leaderboard above.
+  function playerScore(pid: string) {
+    const gross = (scores[pid] ?? []).reduce((s, v) => s + v, 0);
+    return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
+  }
+  const sortedPlayerIds = isTeam
+    ? playerIds
+    : [...playerIds].sort((a, b) => playerScore(a) - playerScore(b));
+
   return (
     <div>
       <PageHeader title="New round" subtitle={`Step 3 of 3 · ${course.name}`} />
@@ -613,7 +624,7 @@ export function NewRoundPage() {
       )}
 
       <div className="space-y-2 mb-4">
-        {playerIds.map((pid) => {
+        {sortedPlayerIds.map((pid) => {
           const player = players.find((p) => p.id === pid);
           const playerScores = scores[pid];
           if (!player || !playerScores) return null;
