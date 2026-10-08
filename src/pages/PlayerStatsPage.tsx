@@ -104,13 +104,13 @@ export function PlayerStatsPage() {
                       <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
                     </div>
                     <p className="text-sm tabular-nums text-right">
-                      <span className="text-green-700 font-semibold">
+                      <span className="text-green-600 font-semibold">
                         {stats.low} ({relToPar(stats.low, par)})
                       </span>
                       {" / "}
-                      <span className="font-medium">{stats.average}</span>
+                      <span className="text-amber-600 font-semibold">{stats.average}</span>
                       {" / "}
-                      <span className="text-slate-500">
+                      <span className="text-red-600 font-semibold">
                         {stats.high} ({relToPar(stats.high, par)})
                       </span>
                     </p>

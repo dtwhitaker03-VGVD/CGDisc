@@ -66,7 +66,17 @@ export function StatsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold tabular-nums">
-                        {stats ? `${stats.low} / ${stats.average} / ${stats.high}` : "—"}
+                        {stats ? (
+                          <>
+                            <span className="text-green-600">{stats.low}</span>
+                            {" / "}
+                            <span className="text-amber-600">{stats.average}</span>
+                            {" / "}
+                            <span className="text-red-600">{stats.high}</span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </p>
                       <p className="text-[11px] text-slate-400">
                         {stats ? `${stats.rounds} rounds` : "No rounds yet"}
