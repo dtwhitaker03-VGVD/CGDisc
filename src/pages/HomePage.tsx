@@ -4,6 +4,7 @@ import { useAuth } from "../store/AuthContext";
 import { computeHandicap, playerDifferentials, roundRating, scoreToPar } from "../lib/ratings";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 import { LegacyImportCard } from "../components/LegacyImportCard";
+import { IosInstallHint } from "../components/IosInstallHint";
 
 export function HomePage() {
   const { players, rounds, courses, coursesById } = useAppData();
@@ -41,6 +42,7 @@ export function HomePage() {
         }
       />
 
+      <IosInstallHint />
       <LegacyImportCard />
 
       <div className="grid grid-cols-2 gap-3 mb-4">
