@@ -211,7 +211,7 @@ export function NewRoundPage() {
     try {
       const handicapped = roundMode === "handicapped";
       const isTeam = roundMode === "team";
-      const round = await addRound({
+      await addRound({
         courseId: course.id,
         date,
         playerIds,
@@ -223,7 +223,7 @@ export function NewRoundPage() {
           : undefined,
       });
       clearDraft();
-      navigate(`/round/${round.id}`);
+      navigate("/");
     } finally {
       setSaving(false);
     }
@@ -668,7 +668,7 @@ export function NewRoundPage() {
           disabled={isLastHole && saving}
           onClick={() => (isLastHole ? handleSave() : goToHole(activeHoleIndex + 1))}
         >
-          {isLastHole ? (saving ? "Saving…" : "Save round") : "Next hole"}
+          {isLastHole ? (saving ? "Finalizing…" : "Finalize round") : "Next hole"}
         </Button>
       </div>
       <button
