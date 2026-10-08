@@ -55,7 +55,7 @@ export function CourseStatsPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-400">Average</p>
-                <p className="text-xl font-bold text-amber-600 tabular-nums">{overall.average}</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums">{overall.average}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">High</p>
@@ -97,7 +97,7 @@ export function CourseStatsPage() {
                     <p className="text-sm tabular-nums">
                       <span className="text-green-600 font-semibold">{stats.low}</span>
                       {" / "}
-                      <span className="text-amber-600 font-semibold">{stats.average}</span>
+                      <span className="text-slate-900 font-semibold">{stats.average}</span>
                       {" / "}
                       <span className="text-red-600 font-semibold">{stats.high}</span>
                     </p>

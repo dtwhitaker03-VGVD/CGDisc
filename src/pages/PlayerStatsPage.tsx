@@ -108,7 +108,7 @@ export function PlayerStatsPage() {
                         {stats.low} ({relToPar(stats.low, par)})
                       </span>
                       {" / "}
-                      <span className="text-amber-600 font-semibold">{stats.average}</span>
+                      <span className="text-slate-900 font-semibold">{stats.average}</span>
                       {" / "}
                       <span className="text-red-600 font-semibold">
                         {stats.high} ({relToPar(stats.high, par)})
