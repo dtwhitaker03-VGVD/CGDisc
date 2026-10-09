@@ -620,14 +620,14 @@ export function NewRoundPage() {
   // Holes default to par until changed (so the stepper's baseline is always
   // par, per-hole), but showing every unplayed hole's par from the start
   // would make a fresh round look already finished. So every running total
-  // shown during scoring only counts holes up through the current one --
-  // it starts at hole 1's score and grows hole by hole as you progress,
-  // rather than starting at the whole course's par.
+  // shown during scoring only counts holes already moved past -- it's 0 on
+  // hole 1, and a hole's score joins the total only once you advance off of
+  // it, rather than starting at the whole course's par.
   function liveTotal(strokes: number[] | undefined): number {
-    return totalScore((strokes ?? []).slice(0, activeHoleIndex + 1));
+    return totalScore((strokes ?? []).slice(0, activeHoleIndex));
   }
   function playedPar(): number {
-    return course!.holes.slice(0, activeHoleIndex + 1).reduce((sum, h) => sum + h.par, 0);
+    return course!.holes.slice(0, activeHoleIndex).reduce((sum, h) => sum + h.par, 0);
   }
   function liveRelToPar(strokes: number[] | undefined): number {
     return liveTotal(strokes) - playedPar();
@@ -661,7 +661,7 @@ export function NewRoundPage() {
         if (isScramble) {
           total = liveTotal(scores[memberIds[0]]);
         } else if (teamGameType === "bestBall") {
-          total = course.holes.slice(0, activeHoleIndex + 1).reduce((sum, _h, holeIndex) => {
+          total = course.holes.slice(0, activeHoleIndex).reduce((sum, _h, holeIndex) => {
             const holeScores = memberIds
               .map((pid) => scores[pid]?.[holeIndex])
               .filter((v): v is number => typeof v === "number");
