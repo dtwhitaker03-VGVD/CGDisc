@@ -34,7 +34,8 @@ export function RoundsPage() {
                       const strokes = round.scores[pid];
                       const player = playersById.get(pid);
                       if (!strokes || !player) return null;
-                      const rel = scoreToPar(strokes, course);
+                      const droppedAt = round.droppedPlayers?.[pid];
+                      const rel = scoreToPar(strokes, course, droppedAt);
                       return (
                         <span key={pid}>
                           <span style={{ color: player.color }} className="font-medium">
@@ -42,6 +43,9 @@ export function RoundsPage() {
                           </span>{" "}
                           <span className="tabular-nums text-slate-600">
                             {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                            {droppedAt !== undefined && (
+                              <span className="text-amber-600"> · left h{droppedAt}</span>
+                            )}
                           </span>
                         </span>
                       );

@@ -33,6 +33,7 @@ interface RoundDraft {
   teamCount: number;
   teamGameType: "scramble" | "bestBall" | "teamTotal";
   scoringMethod: "strokes" | "holes";
+  droppedPlayers: Record<string, number>;
 }
 
 function loadDraft(): RoundDraft | null {
@@ -79,6 +80,10 @@ export function NewRoundPage() {
     "bestBall",
   );
   const [scoringMethod, setScoringMethod] = useState<"strokes" | "holes">("strokes");
+  // Players who left partway through the round (only supported for
+  // non-team rounds) -- maps playerId to how many holes they played
+  // before leaving, so their score through that point still counts.
+  const [droppedPlayers, setDroppedPlayers] = useState<Record<string, number>>({});
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -100,6 +105,7 @@ export function NewRoundPage() {
     setTeamCount(pendingDraft.teamCount);
     setTeamGameType(pendingDraft.teamGameType ?? "bestBall");
     setScoringMethod(pendingDraft.scoringMethod ?? "strokes");
+    setDroppedPlayers(pendingDraft.droppedPlayers ?? {});
     setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
     setPendingDraft(null);
   }
@@ -121,6 +127,7 @@ export function NewRoundPage() {
     setTeamCount(2);
     setTeamGameType("bestBall");
     setScoringMethod("strokes");
+    setDroppedPlayers({});
   }
 
   // Once the draft prompt (if any) is resolved, keep saving progress as the
@@ -139,6 +146,7 @@ export function NewRoundPage() {
       teamCount,
       teamGameType,
       scoringMethod,
+      droppedPlayers,
     });
   }, [
     pendingDraft,
@@ -153,6 +161,7 @@ export function NewRoundPage() {
     teamCount,
     teamGameType,
     scoringMethod,
+    droppedPlayers,
   ]);
 
   const preselectedSelf = useRef(false);
@@ -254,6 +263,7 @@ export function NewRoundPage() {
     }
     setScores(initial);
     setActiveHoleIndex(0);
+    setDroppedPlayers({});
     setStep(3);
   }
 
@@ -262,6 +272,28 @@ export function NewRoundPage() {
       ...prev,
       [playerId]: prev[playerId].map((s, i) => (i === holeIndex ? value : s)),
     }));
+  }
+
+  // Locks in a player's score through the current hole and drops them from
+  // the rest of the round -- their partial scorecard is kept (and still
+  // counts toward lifetime hole stats), but they're excluded from
+  // handicap/rating and from course low/avg/high stats since the round
+  // isn't complete for them. Only offered for non-team rounds.
+  function dropPlayer(playerId: string) {
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return;
+    if (
+      !confirm(
+        `Remove ${player.name} from the rest of this round? Their score through hole ${activeHoleIndex} will still be saved.`,
+      )
+    ) {
+      return;
+    }
+    setScores((prev) => ({
+      ...prev,
+      [playerId]: (prev[playerId] ?? []).slice(0, activeHoleIndex),
+    }));
+    setDroppedPlayers((prev) => ({ ...prev, [playerId]: activeHoleIndex }));
   }
 
   // Scramble: the whole team shares one ball, so one score entry is applied
@@ -296,6 +328,7 @@ export function NewRoundPage() {
           : undefined,
         teamGameType: isTeam ? teamGameType : undefined,
         scoringMethod: handicapped ? undefined : scoringMethod,
+        droppedPlayers: Object.keys(droppedPlayers).length > 0 ? droppedPlayers : undefined,
       });
       clearDraft();
       navigate("/");
@@ -727,23 +760,35 @@ export function NewRoundPage() {
   function finalPar(): number {
     return parThrough(course!.holes.length);
   }
-  function finalRelToPar(strokes: number[] | undefined): number {
-    return finalTotal(strokes) - finalPar();
+  // A player who left early only has a score through the hole they left
+  // at, so their "final" par has to stop there too -- otherwise they'd be
+  // compared against a full round they didn't finish.
+  function effectiveHolesCount(pid: string, holesCount: number): number {
+    const dropped = droppedPlayers[pid];
+    return dropped === undefined ? holesCount : Math.min(dropped, holesCount);
   }
+  function finalRelToPar(pid: string): number {
+    return finalTotal(scores[pid]) - parThrough(effectiveHolesCount(pid, course!.holes.length));
+  }
+
+  // Players who left the round early are excluded from the live scoring
+  // list and leaderboards (activePlayerIds), but still appear -- with their
+  // partial score -- in the final review/saved views (playerIds).
+  const activePlayerIds = playerIds.filter((pid) => !(pid in droppedPlayers));
 
   function buildNetStandings(
     totalFn: (s: number[] | undefined) => number,
-    parFn: () => number,
+    parFn: (pid: string) => number,
+    ids: string[],
   ) {
-    const par = parFn();
-    return playerIds
+    return ids
       .map((pid) => {
         const player = players.find((p) => p.id === pid);
         const playerScores = scores[pid];
         if (!player || !playerScores) return null;
         const gross = totalFn(playerScores);
         const allowance = allowances[pid] ?? 0;
-        const grossRelToPar = gross - par;
+        const grossRelToPar = gross - parFn(pid);
         const netRelToPar = grossRelToPar - allowance;
         return { pid, player, gross, grossRelToPar, netRelToPar };
       })
@@ -780,9 +825,17 @@ export function NewRoundPage() {
       .sort((a, b) => a.total - b.total);
   }
 
-  const netStandings = isHandicapped ? buildNetStandings(liveTotal, playedPar) : [];
+  const netStandings = isHandicapped
+    ? buildNetStandings(liveTotal, () => playedPar(), activePlayerIds)
+    : [];
   const teamStandings = isTeam ? buildTeamStandings(liveTotal, activeHoleIndex) : [];
-  const finalNetStandings = isHandicapped ? buildNetStandings(finalTotal, finalPar) : [];
+  const finalNetStandings = isHandicapped
+    ? buildNetStandings(
+        finalTotal,
+        (pid) => parThrough(effectiveHolesCount(pid, course.holes.length)),
+        playerIds,
+      )
+    : [];
   const finalTeamStandings = isTeam
     ? buildTeamStandings(finalTotal, course.holes.length)
     : [];
@@ -794,12 +847,12 @@ export function NewRoundPage() {
   // cutoff used elsewhere drives how many holes have been decided so far.
   const isHolesScoring = (roundMode === "straight" || isTeam) && scoringMethod === "holes";
 
-  function buildPlayerHoleWins(holesCount: number) {
+  function buildPlayerHoleWins(holesCount: number, ids: string[]) {
     const wins = computeHoleWins(
       holesCount,
-      playerIds.map((pid) => ({ id: pid, perHoleScores: scores[pid] ?? [] })),
+      ids.map((pid) => ({ id: pid, perHoleScores: scores[pid] ?? [] })),
     );
-    return playerIds
+    return ids
       .map((pid) => {
         const player = players.find((p) => p.id === pid);
         if (!player) return null;
@@ -833,8 +886,10 @@ export function NewRoundPage() {
       .sort((a, b) => b.holesWon - a.holesWon);
   }
 
-  const holeWins = isHolesScoring && !isTeam ? buildPlayerHoleWins(activeHoleIndex) : [];
-  const finalHoleWins = isHolesScoring && !isTeam ? buildPlayerHoleWins(course.holes.length) : [];
+  const holeWins =
+    isHolesScoring && !isTeam ? buildPlayerHoleWins(activeHoleIndex, activePlayerIds) : [];
+  const finalHoleWins =
+    isHolesScoring && !isTeam ? buildPlayerHoleWins(course.holes.length, playerIds) : [];
   const teamHoleWins = isHolesScoring && isTeam ? buildTeamHoleWins(activeHoleIndex) : [];
   const finalTeamHoleWins =
     isHolesScoring && isTeam ? buildTeamHoleWins(course.holes.length) : [];
@@ -854,7 +909,7 @@ export function NewRoundPage() {
   }
   const sortedPlayerIds = isTeam
     ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
-    : [...playerIds].sort((a, b) => playerScore(a) - playerScore(b));
+    : [...activePlayerIds].sort((a, b) => playerScore(a) - playerScore(b));
   const finalSortedPlayerIds = isTeam
     ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
     : [...playerIds].sort((a, b) => finalPlayerScore(a) - finalPlayerScore(b));
@@ -888,6 +943,19 @@ export function NewRoundPage() {
       <div>
         <PageHeader title="New round" subtitle={`Review · ${course.name}`} />
 
+        {Object.keys(droppedPlayers).length > 0 && (
+          <Card className="mb-3 bg-amber-50 border-amber-200">
+            <p className="text-xs text-amber-800">
+              {Object.entries(droppedPlayers)
+                .map(([pid, n]) => {
+                  const name = players.find((p) => p.id === pid)?.name ?? "Someone";
+                  return `${name} left after hole ${n}`;
+                })
+                .join(" · ")}
+            </p>
+          </Card>
+        )}
+
         {isHandicapped && (
           <Card className="mb-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -903,6 +971,11 @@ export function NewRoundPage() {
                       style={{ backgroundColor: row.player.color }}
                     />
                     <span className="font-medium text-slate-800">{row.player.name}</span>
+                    {droppedPlayers[row.pid] !== undefined && (
+                      <span className="text-[10px] text-amber-600 font-normal">
+                        left h{droppedPlayers[row.pid]}
+                      </span>
+                    )}
                   </span>
                   <span className="tabular-nums text-slate-500">
                     {`${row.gross} · (${
@@ -936,7 +1009,7 @@ export function NewRoundPage() {
                 const player = players.find((p) => p.id === pid);
                 if (!player) return null;
                 const total = finalTotal(scores[pid]);
-                const rel = finalRelToPar(scores[pid]);
+                const rel = finalRelToPar(pid);
                 return (
                   <div key={pid} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
@@ -946,6 +1019,11 @@ export function NewRoundPage() {
                         style={{ backgroundColor: player.color }}
                       />
                       <span className="font-medium text-slate-800">{player.name}</span>
+                      {droppedPlayers[pid] !== undefined && (
+                        <span className="text-[10px] text-amber-600 font-normal">
+                          left h{droppedPlayers[pid]}
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold text-slate-900 tabular-nums">
                       {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
@@ -964,7 +1042,7 @@ export function NewRoundPage() {
             </p>
             <div className="space-y-1.5">
               {finalHoleWins.map((row, i) => {
-                const rel = finalRelToPar(scores[row.pid]);
+                const rel = finalRelToPar(row.pid);
                 return (
                   <div key={row.pid} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
@@ -974,6 +1052,11 @@ export function NewRoundPage() {
                         style={{ backgroundColor: row.player.color }}
                       />
                       <span className="font-medium text-slate-800">{row.player.name}</span>
+                      {droppedPlayers[row.pid] !== undefined && (
+                        <span className="text-[10px] text-amber-600 font-normal">
+                          left h{droppedPlayers[row.pid]}
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold text-slate-900 tabular-nums">
                       {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
@@ -1055,6 +1138,11 @@ export function NewRoundPage() {
                 {reviewColumns.map((col) => (
                   <th key={col.key} className="font-medium pb-2 px-1 min-w-[56px]">
                     {col.label}
+                    {col.pid && droppedPlayers[col.pid] !== undefined && (
+                      <span className="block text-[10px] text-amber-600 font-normal normal-case">
+                        left h{droppedPlayers[col.pid]}
+                      </span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -1069,11 +1157,15 @@ export function NewRoundPage() {
                       {h.distanceFt ? `, ${h.distanceFt}ft` : ""})
                     </span>
                   </td>
-                  {reviewColumns.map((col) => (
-                    <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
-                      {col.pid ? scores[col.pid]?.[i] ?? h.par : "—"}
-                    </td>
-                  ))}
+                  {reviewColumns.map((col) => {
+                    const droppedAt = col.pid ? droppedPlayers[col.pid] : undefined;
+                    const leftBeforeThisHole = droppedAt !== undefined && i >= droppedAt;
+                    return (
+                      <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
+                        {col.pid && !leftBeforeThisHole ? scores[col.pid]?.[i] ?? h.par : "—"}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -1082,7 +1174,7 @@ export function NewRoundPage() {
                 <td className="py-1.5 sticky left-0 bg-white pr-2">Total</td>
                 {reviewColumns.map((col) => {
                   const total = col.pid ? finalTotal(scores[col.pid]) : 0;
-                  const rel = col.pid ? finalRelToPar(scores[col.pid]) : 0;
+                  const rel = col.pid ? finalRelToPar(col.pid) : 0;
                   return (
                     <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
                       {total}{" "}
@@ -1197,6 +1289,15 @@ export function NewRoundPage() {
                       Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
                     </p>
+                    {!isTeam && (
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-red-500 mt-0.5"
+                        onClick={() => dropPlayer(pid)}
+                      >
+                        Left early
+                      </button>
+                    )}
                   </div>
                   <ScoreStepper
                     value={playerScores[activeHoleIndex] ?? hole.par}
