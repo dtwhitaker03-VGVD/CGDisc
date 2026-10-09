@@ -220,22 +220,24 @@ export function RoundDetailPage() {
             Holes won
           </p>
           <div className="space-y-1.5">
-            {playerHoleWinRows.map((row, i) => (
-              <div key={row.pid} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="text-slate-400 w-4">{i + 1}</span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: row.player.color }}
-                  />
-                  <span className="font-medium text-slate-800">{row.player.name}</span>
-                </span>
-                <span className="font-semibold text-slate-900 tabular-nums">
-                  {row.holesWon} won
-                  {row.holesHalved > 0 ? ` · ${row.holesHalved} halved` : ""}
-                </span>
-              </div>
-            ))}
+            {playerHoleWinRows.map((row, i) => {
+              const rel = scoreToPar(draftScores[row.pid] ?? [], course);
+              return (
+                <div key={row.pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: row.player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{row.player.name}</span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -251,25 +253,31 @@ export function RoundDetailPage() {
                   .map((team) => ({
                     ...team,
                     ...teamHoleWinsMap[`team-${team.teamIndex}`],
+                    total: teamTotal(team.pids),
                   }))
                   .sort((a, b) => b.holesWon - a.holesWon)
-                  .map((team, i) => (
-                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="text-slate-400 w-4">{i + 1}</span>
-                        <span className="font-medium text-slate-800">
-                          Team {team.teamIndex + 1}{" "}
-                          <span className="text-xs text-slate-400 font-normal">
-                            ({team.members.map((m) => m.name).join(", ")})
+                  .map((team, i) => {
+                    const parBaseline =
+                      coursePar(course) *
+                      (round.teamGameType === "teamTotal" ? team.members.length : 1);
+                    const rel = team.total - parBaseline;
+                    return (
+                      <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="text-slate-400 w-4">{i + 1}</span>
+                          <span className="font-medium text-slate-800">
+                            Team {team.teamIndex + 1}{" "}
+                            <span className="text-xs text-slate-400 font-normal">
+                              ({team.members.map((m) => m.name).join(", ")})
+                            </span>
                           </span>
                         </span>
-                      </span>
-                      <span className="font-semibold text-slate-900 tabular-nums">
-                        {team.holesWon} won
-                        {team.holesHalved > 0 ? ` · ${team.holesHalved} halved` : ""}
-                      </span>
-                    </div>
-                  ))
+                        <span className="font-semibold text-slate-900 tabular-nums">
+                          {team.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                        </span>
+                      </div>
+                    );
+                  })
               : teamGroups
                   .map((team) => ({ ...team, total: teamTotal(team.pids) }))
                   .sort((a, b) => a.total - b.total)

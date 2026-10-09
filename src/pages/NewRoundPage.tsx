@@ -914,22 +914,24 @@ export function NewRoundPage() {
               Holes won
             </p>
             <div className="space-y-1.5">
-              {finalHoleWins.map((row, i) => (
-                <div key={row.pid} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="text-slate-400 w-4">{i + 1}</span>
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: row.player.color }}
-                    />
-                    <span className="font-medium text-slate-800">{row.player.name}</span>
-                  </span>
-                  <span className="font-semibold text-slate-900 tabular-nums">
-                    {row.holesWon} won
-                    {row.holesHalved > 0 ? ` · ${row.holesHalved} halved` : ""}
-                  </span>
-                </div>
-              ))}
+              {finalHoleWins.map((row, i) => {
+                const rel = finalRelToPar(scores[row.pid]);
+                return (
+                  <div key={row.pid} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 w-4">{i + 1}</span>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: row.player.color }}
+                      />
+                      <span className="font-medium text-slate-800">{row.player.name}</span>
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         )}
@@ -941,26 +943,33 @@ export function NewRoundPage() {
             </p>
             <div className="space-y-2">
               {isHolesScoring
-                ? finalTeamHoleWins.map((team, i) => (
-                    <div
-                      key={team.teamIndex}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="text-slate-400 w-4">{i + 1}</span>
-                        <span className="font-medium text-slate-800">
-                          Team {team.teamIndex + 1}{" "}
-                          <span className="text-xs text-slate-400 font-normal">
-                            ({team.members.map((m) => m.name).join(", ")})
+                ? finalTeamHoleWins.map((team, i) => {
+                    const standing = finalTeamStandings.find(
+                      (t) => t.teamIndex === team.teamIndex,
+                    );
+                    const parBaseline =
+                      finalPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+                    const rel = (standing?.total ?? 0) - parBaseline;
+                    return (
+                      <div
+                        key={team.teamIndex}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="text-slate-400 w-4">{i + 1}</span>
+                          <span className="font-medium text-slate-800">
+                            Team {team.teamIndex + 1}{" "}
+                            <span className="text-xs text-slate-400 font-normal">
+                              ({team.members.map((m) => m.name).join(", ")})
+                            </span>
                           </span>
                         </span>
-                      </span>
-                      <span className="font-semibold text-slate-900 tabular-nums">
-                        {team.holesWon} won
-                        {team.holesHalved > 0 ? ` · ${team.holesHalved} halved` : ""}
-                      </span>
-                    </div>
-                  ))
+                        <span className="font-semibold text-slate-900 tabular-nums">
+                          {team.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                        </span>
+                      </div>
+                    );
+                  })
                 : finalTeamStandings.map((team, i) => {
                     const parBaseline =
                       finalPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
@@ -1123,22 +1132,24 @@ export function NewRoundPage() {
             Holes won
           </p>
           <div className="space-y-1.5">
-            {holeWins.map((row, i) => (
-              <div key={row.pid} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="text-slate-400 w-4">{i + 1}</span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: row.player.color }}
-                  />
-                  <span className="font-medium text-slate-800">{row.player.name}</span>
-                </span>
-                <span className="font-semibold text-slate-900 tabular-nums">
-                  {row.holesWon} won
-                  {row.holesHalved > 0 ? ` · ${row.holesHalved} halved` : ""}
-                </span>
-              </div>
-            ))}
+            {holeWins.map((row, i) => {
+              const rel = liveRelToPar(scores[row.pid]);
+              return (
+                <div key={row.pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: row.player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{row.player.name}</span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -1150,23 +1161,28 @@ export function NewRoundPage() {
           </p>
           <div className="space-y-2">
             {isHolesScoring
-              ? teamHoleWins.map((team, i) => (
-                  <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className="text-slate-400 w-4">{i + 1}</span>
-                      <span className="font-medium text-slate-800">
-                        Team {team.teamIndex + 1}{" "}
-                        <span className="text-xs text-slate-400 font-normal">
-                          ({team.members.map((m) => m.name).join(", ")})
+              ? teamHoleWins.map((team, i) => {
+                  const standing = teamStandings.find((t) => t.teamIndex === team.teamIndex);
+                  const parBaseline =
+                    playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+                  const rel = (standing?.total ?? 0) - parBaseline;
+                  return (
+                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-slate-400 w-4">{i + 1}</span>
+                        <span className="font-medium text-slate-800">
+                          Team {team.teamIndex + 1}{" "}
+                          <span className="text-xs text-slate-400 font-normal">
+                            ({team.members.map((m) => m.name).join(", ")})
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    <span className="font-semibold text-slate-900 tabular-nums">
-                      {team.holesWon} won
-                      {team.holesHalved > 0 ? ` · ${team.holesHalved} halved` : ""}
-                    </span>
-                  </div>
-                ))
+                      <span className="font-semibold text-slate-900 tabular-nums">
+                        {team.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                      </span>
+                    </div>
+                  );
+                })
               : teamStandings.map((team, i) => {
                   // Team total sums every teammate's own score, so the fair
                   // par baseline for the team is par times the number of
