@@ -91,6 +91,19 @@ export function RoundDetailPage() {
         })()
       : [];
 
+  const strokesLeaderboardRows =
+    !round.teamAssignments && !round.handicapped && !isHolesScoring
+      ? round.playerIds
+          .map((pid) => {
+            const player = playersById.get(pid);
+            const strokes = draftScores[pid];
+            if (!player || !strokes) return null;
+            return { pid, player, total: totalScore(strokes), rel: scoreToPar(strokes, course) };
+          })
+          .filter((row): row is NonNullable<typeof row> => Boolean(row))
+          .sort((a, b) => a.total - b.total)
+      : [];
+
   const teamHoleWinsMap =
     isHolesScoring && round.teamAssignments
       ? computeHoleWins(
@@ -210,6 +223,31 @@ export function RoundDetailPage() {
                   </span>
                 </div>
               ))}
+          </div>
+        </Card>
+      )}
+
+      {strokesLeaderboardRows.length > 0 && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Leaderboard
+          </p>
+          <div className="space-y-1.5">
+            {strokesLeaderboardRows.map((row, i) => (
+              <div key={row.pid} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="text-slate-400 w-4">{i + 1}</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: row.player.color }}
+                  />
+                  <span className="font-medium text-slate-800">{row.player.name}</span>
+                </span>
+                <span className="font-semibold text-slate-900 tabular-nums">
+                  {row.total} ({row.rel === 0 ? "E" : row.rel > 0 ? `+${row.rel}` : row.rel})
+                </span>
+              </div>
+            ))}
           </div>
         </Card>
       )}
