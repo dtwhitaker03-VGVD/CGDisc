@@ -338,7 +338,9 @@ export function NewRoundPage() {
             <Card
               key={c.id}
               className={`flex items-center justify-between gap-3 ${
-                courseId === c.id ? "border-green-600 ring-2 ring-green-100" : ""
+                courseId === c.id
+                  ? "border-green-700 ring-4 ring-green-300 bg-green-50"
+                  : ""
               }`}
             >
               <button type="button" onClick={() => setCourseId(c.id)} className="flex-1 text-left">
