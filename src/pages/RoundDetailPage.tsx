@@ -203,10 +203,12 @@ export function RoundDetailPage() {
                 if (!player || !strokes) return null;
                 const gross = totalScore(strokes);
                 const allowance = round.handicapAllowances?.[pid] ?? 0;
-                return { pid, player, gross, allowance, net: gross - allowance };
+                const grossRelToPar = scoreToPar(strokes, course);
+                const netRelToPar = grossRelToPar - allowance;
+                return { pid, player, gross, grossRelToPar, netRelToPar };
               })
               .filter((row): row is NonNullable<typeof row> => Boolean(row))
-              .sort((a, b) => a.net - b.net)
+              .sort((a, b) => a.netRelToPar - b.netRelToPar)
               .map((row, i) => (
                 <div key={row.pid} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
@@ -218,8 +220,20 @@ export function RoundDetailPage() {
                     <span className="font-medium text-slate-800">{row.player.name}</span>
                   </span>
                   <span className="tabular-nums text-slate-500">
-                    {row.gross} − {row.allowance} ={" "}
-                    <span className="font-semibold text-slate-900">{row.net}</span>
+                    {row.gross} ·{" "}
+                    {row.grossRelToPar === 0
+                      ? "E"
+                      : row.grossRelToPar > 0
+                        ? `+${row.grossRelToPar}`
+                        : row.grossRelToPar}{" "}
+                    ·{" "}
+                    <span className="font-semibold text-slate-900">
+                      {row.netRelToPar === 0
+                        ? "E"
+                        : row.netRelToPar > 0
+                          ? `+${row.netRelToPar}`
+                          : row.netRelToPar}
+                    </span>
                   </span>
                 </div>
               ))}

@@ -731,7 +731,11 @@ export function NewRoundPage() {
     return finalTotal(strokes) - finalPar();
   }
 
-  function buildNetStandings(totalFn: (s: number[] | undefined) => number) {
+  function buildNetStandings(
+    totalFn: (s: number[] | undefined) => number,
+    parFn: () => number,
+  ) {
+    const par = parFn();
     return playerIds
       .map((pid) => {
         const player = players.find((p) => p.id === pid);
@@ -739,10 +743,12 @@ export function NewRoundPage() {
         if (!player || !playerScores) return null;
         const gross = totalFn(playerScores);
         const allowance = allowances[pid] ?? 0;
-        return { pid, player, gross, allowance, net: gross - allowance };
+        const grossRelToPar = gross - par;
+        const netRelToPar = grossRelToPar - allowance;
+        return { pid, player, gross, grossRelToPar, netRelToPar };
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
-      .sort((a, b) => a.net - b.net);
+      .sort((a, b) => a.netRelToPar - b.netRelToPar);
   }
 
   function buildTeamStandings(totalFn: (s: number[] | undefined) => number, holesCount: number) {
@@ -774,9 +780,9 @@ export function NewRoundPage() {
       .sort((a, b) => a.total - b.total);
   }
 
-  const netStandings = isHandicapped ? buildNetStandings(liveTotal) : [];
+  const netStandings = isHandicapped ? buildNetStandings(liveTotal, playedPar) : [];
   const teamStandings = isTeam ? buildTeamStandings(liveTotal, activeHoleIndex) : [];
-  const finalNetStandings = isHandicapped ? buildNetStandings(finalTotal) : [];
+  const finalNetStandings = isHandicapped ? buildNetStandings(finalTotal, finalPar) : [];
   const finalTeamStandings = isTeam
     ? buildTeamStandings(finalTotal, course.holes.length)
     : [];
@@ -899,8 +905,20 @@ export function NewRoundPage() {
                     <span className="font-medium text-slate-800">{row.player.name}</span>
                   </span>
                   <span className="tabular-nums text-slate-500">
-                    {row.gross} − {row.allowance} ={" "}
-                    <span className="font-semibold text-slate-900">{row.net}</span>
+                    {row.gross} ·{" "}
+                    {row.grossRelToPar === 0
+                      ? "E"
+                      : row.grossRelToPar > 0
+                        ? `+${row.grossRelToPar}`
+                        : row.grossRelToPar}{" "}
+                    ·{" "}
+                    <span className="font-semibold text-slate-900">
+                      {row.netRelToPar === 0
+                        ? "E"
+                        : row.netRelToPar > 0
+                          ? `+${row.netRelToPar}`
+                          : row.netRelToPar}
+                    </span>
                   </span>
                 </div>
               ))}
@@ -1223,8 +1241,20 @@ export function NewRoundPage() {
                   <span className="font-medium text-slate-800">{row.player.name}</span>
                 </span>
                 <span className="tabular-nums text-slate-500">
-                  {row.gross} − {row.allowance} ={" "}
-                  <span className="font-semibold text-slate-900">{row.net}</span>
+                  {row.gross} ·{" "}
+                  {row.grossRelToPar === 0
+                    ? "E"
+                    : row.grossRelToPar > 0
+                      ? `+${row.grossRelToPar}`
+                      : row.grossRelToPar}{" "}
+                  ·{" "}
+                  <span className="font-semibold text-slate-900">
+                    {row.netRelToPar === 0
+                      ? "E"
+                      : row.netRelToPar > 0
+                        ? `+${row.netRelToPar}`
+                        : row.netRelToPar}
+                  </span>
                 </span>
               </div>
             ))}
