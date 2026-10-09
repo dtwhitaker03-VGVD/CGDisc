@@ -31,6 +31,54 @@ export function RoundDetailPage() {
     );
   }
 
+  const isScramble = Boolean(round.teamAssignments) && round.teamGameType === "scramble";
+  const showsIndividualRating = !round.teamAssignments || round.teamGameType === "bestBall";
+
+  const teamGroups = round.teamAssignments
+    ? Object.entries(
+        round.playerIds.reduce<Record<number, string[]>>((acc, pid) => {
+          const teamIndex = round.teamAssignments?.[pid] ?? 0;
+          (acc[teamIndex] ??= []).push(pid);
+          return acc;
+        }, {}),
+      ).map(([teamIndex, pids]) => ({
+        teamIndex: Number(teamIndex),
+        pids,
+        members: pids
+          .map((pid) => playersById.get(pid))
+          .filter((p): p is NonNullable<typeof p> => Boolean(p)),
+      }))
+    : [];
+
+  function teamTotal(pids: string[]): number {
+    if (round!.teamGameType === "scramble") return totalScore(draftScores[pids[0]] ?? []);
+    if (round!.teamGameType === "bestBall") {
+      return course!.holes.reduce((sum, _h, i) => {
+        const holeScores = pids
+          .map((pid) => draftScores[pid]?.[i])
+          .filter((v): v is number => typeof v === "number");
+        return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
+      }, 0);
+    }
+    // Legacy team rounds predating teamGameType kept their original sum-of-
+    // individual-totals display.
+    return pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0);
+  }
+
+  // One column per team for scramble (a shared score), otherwise one per
+  // player -- used for both the hole-by-hole table and its header.
+  const scoreColumns = isScramble
+    ? teamGroups.map((team) => ({
+        key: `team-${team.teamIndex}`,
+        label: `Team ${team.teamIndex + 1}`,
+        pids: team.pids,
+      }))
+    : round.playerIds.map((pid) => ({
+        key: pid,
+        label: playersById.get(pid)?.name ?? "",
+        pids: [pid],
+      }));
+
   function setDraftScore(playerId: string, holeIndex: number, value: number) {
     setDraftScores((prev) => ({
       ...prev,
@@ -66,6 +114,8 @@ export function RoundDetailPage() {
           ) : round.teamAssignments ? (
             <span className="text-xs font-semibold text-blue-700 bg-blue-100 rounded-full px-2.5 py-1">
               Team round
+              {round.teamGameType === "scramble" && " · Scramble"}
+              {round.teamGameType === "bestBall" && " · Best ball"}
             </span>
           ) : undefined
         }
@@ -114,20 +164,8 @@ export function RoundDetailPage() {
             Team results
           </p>
           <div className="space-y-2">
-            {Object.entries(
-              round.playerIds.reduce<Record<number, string[]>>((acc, pid) => {
-                const teamIndex = round.teamAssignments?.[pid] ?? 0;
-                (acc[teamIndex] ??= []).push(pid);
-                return acc;
-              }, {}),
-            )
-              .map(([teamIndex, pids]) => ({
-                teamIndex: Number(teamIndex),
-                members: pids
-                  .map((pid) => playersById.get(pid))
-                  .filter((p): p is NonNullable<typeof p> => Boolean(p)),
-                total: pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0),
-              }))
+            {teamGroups
+              .map((team) => ({ ...team, total: teamTotal(team.pids) }))
               .sort((a, b) => a.total - b.total)
               .map((team, i) => (
                 <div key={team.teamIndex} className="flex items-center justify-between text-sm">
@@ -148,28 +186,48 @@ export function RoundDetailPage() {
       )}
 
       <div className="grid grid-cols-2 gap-2 mb-4">
-        {round.playerIds.map((pid) => {
-          const player = playersById.get(pid);
-          const strokes = draftScores[pid];
-          if (!player || !strokes) return null;
-          const rel = scoreToPar(strokes, course);
-          return (
-            <Card key={pid}>
-              <p className="font-medium text-sm" style={{ color: player.color }}>
-                {player.name}
-              </p>
-              <p className="text-xl font-bold tabular-nums">
-                {totalScore(strokes)}{" "}
-                <span className="text-sm font-medium text-slate-400">
-                  ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                </span>
-              </p>
-              {!round.teamAssignments && (
-                <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
-              )}
-            </Card>
-          );
-        })}
+        {isScramble
+          ? teamGroups.map((team) => {
+              const strokes = draftScores[team.pids[0]];
+              if (!strokes) return null;
+              const rel = scoreToPar(strokes, course);
+              return (
+                <Card key={team.teamIndex}>
+                  <p className="font-medium text-sm text-slate-800">Team {team.teamIndex + 1}</p>
+                  <p className="text-[11px] text-slate-400 mb-1">
+                    {team.members.map((m) => m.name).join(", ")}
+                  </p>
+                  <p className="text-xl font-bold tabular-nums">
+                    {totalScore(strokes)}{" "}
+                    <span className="text-sm font-medium text-slate-400">
+                      ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </p>
+                </Card>
+              );
+            })
+          : round.playerIds.map((pid) => {
+              const player = playersById.get(pid);
+              const strokes = draftScores[pid];
+              if (!player || !strokes) return null;
+              const rel = scoreToPar(strokes, course);
+              return (
+                <Card key={pid}>
+                  <p className="font-medium text-sm" style={{ color: player.color }}>
+                    {player.name}
+                  </p>
+                  <p className="text-xl font-bold tabular-nums">
+                    {totalScore(strokes)}{" "}
+                    <span className="text-sm font-medium text-slate-400">
+                      ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </p>
+                  {showsIndividualRating && (
+                    <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
+                  )}
+                </Card>
+              );
+            })}
       </div>
 
       <Card className="mb-4 overflow-x-auto">
@@ -177,9 +235,9 @@ export function RoundDetailPage() {
           <thead>
             <tr className="text-slate-400 text-xs">
               <th className="text-left font-medium pb-2 sticky left-0 bg-white pr-2">Hole</th>
-              {round.playerIds.map((pid) => (
-                <th key={pid} className="font-medium pb-2 px-1 min-w-[56px]">
-                  {playersById.get(pid)?.name}
+              {scoreColumns.map((col) => (
+                <th key={col.key} className="font-medium pb-2 px-1 min-w-[56px]">
+                  {col.label}
                 </th>
               ))}
             </tr>
@@ -194,23 +252,29 @@ export function RoundDetailPage() {
                     {hole.distanceFt ? `, ${hole.distanceFt}ft` : ""})
                   </span>
                 </td>
-                {round.playerIds.map((pid) =>
-                  editing ? (
-                    <td key={pid} className="px-1 py-1.5 text-center">
+                {scoreColumns.map((col) => {
+                  const value = draftScores[col.pids[0]]?.[i] ?? hole.par;
+                  return editing ? (
+                    <td key={col.key} className="px-1 py-1.5 text-center">
                       <input
                         type="number"
                         className="w-12 rounded-lg border border-slate-200 text-center py-1"
-                        value={draftScores[pid]?.[i] ?? hole.par}
-                        onChange={(e) => setDraftScore(pid, i, Number(e.target.value) || hole.par)}
-                        onBlur={() => commitScore(pid)}
+                        value={value}
+                        onChange={(e) => {
+                          const v = Number(e.target.value) || hole.par;
+                          for (const pid of col.pids) setDraftScore(pid, i, v);
+                        }}
+                        onBlur={() => {
+                          for (const pid of col.pids) commitScore(pid);
+                        }}
                       />
                     </td>
                   ) : (
-                    <td key={pid} className="px-1 py-1.5 text-center tabular-nums">
-                      {draftScores[pid]?.[i] ?? hole.par}
+                    <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
+                      {value}
                     </td>
-                  ),
-                )}
+                  );
+                })}
               </tr>
             ))}
           </tbody>

@@ -6,6 +6,7 @@ import {
   computeHandicapAllowances,
   playerDifferentials,
   scoreToPar,
+  totalScore,
 } from "../lib/ratings";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { Button, Card, EmptyState, LinkButton, PageHeader, inputClass } from "../components/ui";
@@ -30,6 +31,7 @@ interface RoundDraft {
   roundMode: "straight" | "handicapped" | "team";
   teamOf: Record<string, number>;
   teamCount: number;
+  teamGameType: "scramble" | "bestBall";
 }
 
 function loadDraft(): RoundDraft | null {
@@ -72,6 +74,7 @@ export function NewRoundPage() {
   const [roundMode, setRoundMode] = useState<"straight" | "handicapped" | "team">("straight");
   const [teamOf, setTeamOf] = useState<Record<string, number>>({});
   const [teamCount, setTeamCount] = useState(2);
+  const [teamGameType, setTeamGameType] = useState<"scramble" | "bestBall">("bestBall");
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -91,6 +94,7 @@ export function NewRoundPage() {
     setRoundMode(pendingDraft.roundMode);
     setTeamOf(pendingDraft.teamOf);
     setTeamCount(pendingDraft.teamCount);
+    setTeamGameType(pendingDraft.teamGameType ?? "bestBall");
     setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
     setPendingDraft(null);
   }
@@ -110,14 +114,38 @@ export function NewRoundPage() {
     setRoundMode("straight");
     setTeamOf({});
     setTeamCount(2);
+    setTeamGameType("bestBall");
   }
 
   // Once the draft prompt (if any) is resolved, keep saving progress as the
   // round is played so it survives a reload.
   useEffect(() => {
     if (pendingDraft || !courseId) return;
-    saveDraft({ step, courseId, playerIds, date, scores, activeHoleIndex, roundMode, teamOf, teamCount });
-  }, [pendingDraft, step, courseId, playerIds, date, scores, activeHoleIndex, roundMode, teamOf, teamCount]);
+    saveDraft({
+      step,
+      courseId,
+      playerIds,
+      date,
+      scores,
+      activeHoleIndex,
+      roundMode,
+      teamOf,
+      teamCount,
+      teamGameType,
+    });
+  }, [
+    pendingDraft,
+    step,
+    courseId,
+    playerIds,
+    date,
+    scores,
+    activeHoleIndex,
+    roundMode,
+    teamOf,
+    teamCount,
+    teamGameType,
+  ]);
 
   const preselectedSelf = useRef(false);
   useEffect(() => {
@@ -222,6 +250,20 @@ export function NewRoundPage() {
     }));
   }
 
+  // Scramble: the whole team shares one ball, so one score entry is applied
+  // to every teammate's own score array (keeps the per-player storage shape
+  // the rest of the app already expects, without needing a separate path).
+  function setTeamHoleScore(teamIndex: number, holeIndex: number, value: number) {
+    const memberIds = playerIds.filter((pid) => (teamOf[pid] ?? 0) === teamIndex);
+    setScores((prev) => {
+      const next = { ...prev };
+      for (const pid of memberIds) {
+        next[pid] = prev[pid].map((s, i) => (i === holeIndex ? value : s));
+      }
+      return next;
+    });
+  }
+
   async function handleSave() {
     if (!course) return;
     setSaving(true);
@@ -238,6 +280,7 @@ export function NewRoundPage() {
         teamAssignments: isTeam
           ? Object.fromEntries(playerIds.map((pid) => [pid, teamOf[pid] ?? 0]))
           : undefined,
+        teamGameType: isTeam ? teamGameType : undefined,
       });
       clearDraft();
       navigate("/");
@@ -427,9 +470,34 @@ export function NewRoundPage() {
 
             {roundMode === "team" && (
               <div>
-                <p className="text-xs text-slate-400 mb-2">
-                  Scores are entered per player as usual, but won't count toward anyone's
-                  handicap or rating.
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setTeamGameType("scramble")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      teamGameType === "scramble"
+                        ? "bg-green-700 text-white"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    Scramble
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeamGameType("bestBall")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      teamGameType === "bestBall"
+                        ? "bg-green-700 text-white"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    Best ball
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  {teamGameType === "scramble"
+                    ? "Teammates share one ball -- enter a single score per team each hole. Doesn't count toward anyone's handicap or rating."
+                    : "Each player plays their own disc and is scored individually, counting toward handicap/rating as usual. The team's score shown is the lowest between teammates on each hole."}
                 </p>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-slate-700">Number of teams</span>
@@ -529,6 +597,7 @@ export function NewRoundPage() {
   const isLastHole = activeHoleIndex === course.holes.length - 1;
   const isHandicapped = roundMode === "handicapped";
   const isTeam = roundMode === "team";
+  const isScramble = isTeam && teamGameType === "scramble";
 
   function goToHole(index: number) {
     setActiveHoleIndex(Math.max(0, Math.min(course!.holes.length - 1, index)));
@@ -550,13 +619,21 @@ export function NewRoundPage() {
 
   const teamStandings = isTeam
     ? Array.from({ length: teamCount }, (_, teamIndex) => {
-        const members = playerIds
-          .filter((pid) => (teamOf[pid] ?? 0) === teamIndex)
+        const memberIds = playerIds.filter((pid) => (teamOf[pid] ?? 0) === teamIndex);
+        const members = memberIds
           .map((pid) => players.find((p) => p.id === pid))
           .filter((p): p is Player => Boolean(p));
-        const total = playerIds
-          .filter((pid) => (teamOf[pid] ?? 0) === teamIndex)
-          .reduce((sum, pid) => sum + (scores[pid]?.reduce((s, v) => s + v, 0) ?? 0), 0);
+        // Scramble: the team shares one score, so every teammate's array is
+        // identical -- just read it once. Best ball: the team's score is
+        // the lowest among teammates on each hole, summed across holes.
+        const total = isScramble
+          ? totalScore(scores[memberIds[0]] ?? [])
+          : course.holes.reduce((sum, _h, holeIndex) => {
+              const holeScores = memberIds
+                .map((pid) => scores[pid]?.[holeIndex])
+                .filter((v): v is number => typeof v === "number");
+              return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
+            }, 0);
         return { teamIndex, members, total };
       })
         .filter((t) => t.members.length > 0)
@@ -657,35 +734,62 @@ export function NewRoundPage() {
       )}
 
       <div className="space-y-2 mb-4">
-        {sortedPlayerIds.map((pid) => {
-          const player = players.find((p) => p.id === pid);
-          const playerScores = scores[pid];
-          if (!player || !playerScores) return null;
-          const total = playerScores.reduce((s, v) => s + v, 0);
-          const rel = scoreToPar(playerScores, course);
-          return (
-            <Card key={pid} className="flex items-center justify-between py-2.5">
-              <div>
-                <p className="font-semibold text-slate-800 flex items-center gap-2">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: player.color }}
+        {isScramble
+          ? teamStandings.map((team) => {
+              const representativePid = playerIds.find(
+                (pid) => (teamOf[pid] ?? 0) === team.teamIndex,
+              );
+              const teamScores = representativePid ? scores[representativePid] : undefined;
+              if (!teamScores) return null;
+              const rel = scoreToPar(teamScores, course);
+              return (
+                <Card key={team.teamIndex} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="font-semibold text-slate-800">Team {team.teamIndex + 1}</p>
+                    <p className="text-xs text-slate-400">
+                      {team.members.map((m) => m.name).join(", ")}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Total {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </p>
+                  </div>
+                  <ScoreStepper
+                    value={teamScores[activeHoleIndex] ?? hole.par}
+                    par={hole.par}
+                    onChange={(v) => setTeamHoleScore(team.teamIndex, activeHoleIndex, v)}
                   />
-                  {player.name}
-                </p>
-                <p className="text-xs text-slate-400">
-                  Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                  {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
-                </p>
-              </div>
-              <ScoreStepper
-                value={playerScores[activeHoleIndex] ?? hole.par}
-                par={hole.par}
-                onChange={(v) => setHoleScore(pid, activeHoleIndex, v)}
-              />
-            </Card>
-          );
-        })}
+                </Card>
+              );
+            })
+          : sortedPlayerIds.map((pid) => {
+              const player = players.find((p) => p.id === pid);
+              const playerScores = scores[pid];
+              if (!player || !playerScores) return null;
+              const total = playerScores.reduce((s, v) => s + v, 0);
+              const rel = scoreToPar(playerScores, course);
+              return (
+                <Card key={pid} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="font-semibold text-slate-800 flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: player.color }}
+                      />
+                      {player.name}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                      {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
+                    </p>
+                  </div>
+                  <ScoreStepper
+                    value={playerScores[activeHoleIndex] ?? hole.par}
+                    par={hole.par}
+                    onChange={(v) => setHoleScore(pid, activeHoleIndex, v)}
+                  />
+                </Card>
+              );
+            })}
       </div>
 
       <div className="flex gap-2">
