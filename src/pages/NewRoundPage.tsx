@@ -4,9 +4,7 @@ import { useAppData } from "../store/AppDataContext";
 import {
   computeHandicap,
   computeHandicapAllowances,
-  coursePar,
   playerDifferentials,
-  scoreToPar,
   totalScore,
 } from "../lib/ratings";
 import { ScoreStepper } from "../components/ScoreStepper";
@@ -619,13 +617,29 @@ export function NewRoundPage() {
     setActiveHoleIndex(Math.max(0, Math.min(course!.holes.length - 1, index)));
   }
 
+  // Holes default to par until changed (so the stepper's baseline is always
+  // par, per-hole), but showing every unplayed hole's par from the start
+  // would make a fresh round look already finished. So every running total
+  // shown during scoring only counts holes up through the current one --
+  // it starts at hole 1's score and grows hole by hole as you progress,
+  // rather than starting at the whole course's par.
+  function liveTotal(strokes: number[] | undefined): number {
+    return totalScore((strokes ?? []).slice(0, activeHoleIndex + 1));
+  }
+  function playedPar(): number {
+    return course!.holes.slice(0, activeHoleIndex + 1).reduce((sum, h) => sum + h.par, 0);
+  }
+  function liveRelToPar(strokes: number[] | undefined): number {
+    return liveTotal(strokes) - playedPar();
+  }
+
   const netStandings = isHandicapped
     ? playerIds
         .map((pid) => {
           const player = players.find((p) => p.id === pid);
           const playerScores = scores[pid];
           if (!player || !playerScores) return null;
-          const gross = playerScores.reduce((s, v) => s + v, 0);
+          const gross = liveTotal(playerScores);
           const allowance = allowances[pid] ?? 0;
           return { pid, player, gross, allowance, net: gross - allowance };
         })
@@ -645,16 +659,16 @@ export function NewRoundPage() {
         // Team total: the sum of teammates' own individual totals.
         let total: number;
         if (isScramble) {
-          total = totalScore(scores[memberIds[0]] ?? []);
+          total = liveTotal(scores[memberIds[0]]);
         } else if (teamGameType === "bestBall") {
-          total = course.holes.reduce((sum, _h, holeIndex) => {
+          total = course.holes.slice(0, activeHoleIndex + 1).reduce((sum, _h, holeIndex) => {
             const holeScores = memberIds
               .map((pid) => scores[pid]?.[holeIndex])
               .filter((v): v is number => typeof v === "number");
             return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
           }, 0);
         } else {
-          total = memberIds.reduce((sum, pid) => sum + totalScore(scores[pid] ?? []), 0);
+          total = memberIds.reduce((sum, pid) => sum + liveTotal(scores[pid]), 0);
         }
         return { teamIndex, members, total };
       })
@@ -666,7 +680,7 @@ export function NewRoundPage() {
   // it's easy to see who's leading while entering scores. Team rounds keep
   // selection order since they already have a team leaderboard above.
   function playerScore(pid: string) {
-    const gross = (scores[pid] ?? []).reduce((s, v) => s + v, 0);
+    const gross = liveTotal(scores[pid]);
     return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
   }
   const sortedPlayerIds = isTeam
@@ -738,7 +752,7 @@ export function NewRoundPage() {
           </p>
           <div className="space-y-2">
             {teamStandings.map((team, i) => {
-              const rel = team.total - coursePar(course);
+              const rel = team.total - playedPar();
               return (
                 <div key={team.teamIndex} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
@@ -768,7 +782,7 @@ export function NewRoundPage() {
               );
               const teamScores = representativePid ? scores[representativePid] : undefined;
               if (!teamScores) return null;
-              const rel = scoreToPar(teamScores, course);
+              const rel = liveRelToPar(teamScores);
               return (
                 <Card key={team.teamIndex} className="flex items-center justify-between py-2.5">
                   <div>
@@ -792,8 +806,8 @@ export function NewRoundPage() {
               const player = players.find((p) => p.id === pid);
               const playerScores = scores[pid];
               if (!player || !playerScores) return null;
-              const total = playerScores.reduce((s, v) => s + v, 0);
-              const rel = scoreToPar(playerScores, course);
+              const total = liveTotal(playerScores);
+              const rel = liveRelToPar(playerScores);
               return (
                 <Card key={pid} className="flex items-center justify-between py-2.5">
                   <div>
