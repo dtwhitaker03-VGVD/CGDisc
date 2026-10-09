@@ -21,7 +21,7 @@ function todayIso() {
 const DRAFT_STORAGE_KEY = "cgdisc:new-round-draft";
 
 interface RoundDraft {
-  step: 1 | 2 | 3;
+  step: 1 | 2 | 3 | 4;
   courseId: string | null;
   playerIds: string[];
   date: string;
@@ -62,7 +62,7 @@ export function NewRoundPage() {
   const navigate = useNavigate();
   const { courses, players, rounds, coursesById, addPlayer, addRound } = useAppData();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [playerIds, setPlayerIds] = useState<string[]>([]);
   const [newFriendName, setNewFriendName] = useState("");
@@ -300,7 +300,8 @@ export function NewRoundPage() {
           <p className="text-slate-700">
             You have an unfinished round at{" "}
             <span className="font-semibold">{draftCourse?.name ?? "a course"}</span>
-            {draft.step === 3 && ` (hole ${draft.activeHoleIndex + 1} of ${draftCourse?.holes.length ?? "?"})`}.
+            {draft.step === 3 && ` (hole ${draft.activeHoleIndex + 1} of ${draftCourse?.holes.length ?? "?"})`}
+            {draft.step === 4 && " (reviewing final scores)"}.
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={discardDraft}>
@@ -625,57 +626,81 @@ export function NewRoundPage() {
   // shown during scoring only counts holes already moved past -- it's 0 on
   // hole 1, and a hole's score joins the total only once you advance off of
   // it, rather than starting at the whole course's par.
+  function totalThrough(strokes: number[] | undefined, holesCount: number): number {
+    return totalScore((strokes ?? []).slice(0, holesCount));
+  }
+  function parThrough(holesCount: number): number {
+    return course!.holes.slice(0, holesCount).reduce((sum, h) => sum + h.par, 0);
+  }
   function liveTotal(strokes: number[] | undefined): number {
-    return totalScore((strokes ?? []).slice(0, activeHoleIndex));
+    return totalThrough(strokes, activeHoleIndex);
   }
   function playedPar(): number {
-    return course!.holes.slice(0, activeHoleIndex).reduce((sum, h) => sum + h.par, 0);
+    return parThrough(activeHoleIndex);
   }
   function liveRelToPar(strokes: number[] | undefined): number {
     return liveTotal(strokes) - playedPar();
   }
+  // Once the round is finished, the review screen shows the real total --
+  // every hole counts, not just the ones already moved past.
+  function finalTotal(strokes: number[] | undefined): number {
+    return totalThrough(strokes, course!.holes.length);
+  }
+  function finalPar(): number {
+    return parThrough(course!.holes.length);
+  }
+  function finalRelToPar(strokes: number[] | undefined): number {
+    return finalTotal(strokes) - finalPar();
+  }
 
-  const netStandings = isHandicapped
-    ? playerIds
-        .map((pid) => {
-          const player = players.find((p) => p.id === pid);
-          const playerScores = scores[pid];
-          if (!player || !playerScores) return null;
-          const gross = liveTotal(playerScores);
-          const allowance = allowances[pid] ?? 0;
-          return { pid, player, gross, allowance, net: gross - allowance };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row))
-        .sort((a, b) => a.net - b.net)
-    : [];
-
-  const teamStandings = isTeam
-    ? Array.from({ length: teamCount }, (_, teamIndex) => {
-        const memberIds = playerIds.filter((pid) => (teamOf[pid] ?? 0) === teamIndex);
-        const members = memberIds
-          .map((pid) => players.find((p) => p.id === pid))
-          .filter((p): p is Player => Boolean(p));
-        // Scramble: the team shares one score, so every teammate's array is
-        // identical -- just read it once. Best ball: the team's score is
-        // the lowest among teammates on each hole, summed across holes.
-        // Team total: the sum of teammates' own individual totals.
-        let total: number;
-        if (isScramble) {
-          total = liveTotal(scores[memberIds[0]]);
-        } else if (teamGameType === "bestBall") {
-          total = course.holes.slice(0, activeHoleIndex).reduce((sum, _h, holeIndex) => {
-            const holeScores = memberIds
-              .map((pid) => scores[pid]?.[holeIndex])
-              .filter((v): v is number => typeof v === "number");
-            return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
-          }, 0);
-        } else {
-          total = memberIds.reduce((sum, pid) => sum + liveTotal(scores[pid]), 0);
-        }
-        return { teamIndex, members, total };
+  function buildNetStandings(totalFn: (s: number[] | undefined) => number) {
+    return playerIds
+      .map((pid) => {
+        const player = players.find((p) => p.id === pid);
+        const playerScores = scores[pid];
+        if (!player || !playerScores) return null;
+        const gross = totalFn(playerScores);
+        const allowance = allowances[pid] ?? 0;
+        return { pid, player, gross, allowance, net: gross - allowance };
       })
-        .filter((t) => t.members.length > 0)
-        .sort((a, b) => a.total - b.total)
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((a, b) => a.net - b.net);
+  }
+
+  function buildTeamStandings(totalFn: (s: number[] | undefined) => number, holesCount: number) {
+    return Array.from({ length: teamCount }, (_, teamIndex) => {
+      const memberIds = playerIds.filter((pid) => (teamOf[pid] ?? 0) === teamIndex);
+      const members = memberIds
+        .map((pid) => players.find((p) => p.id === pid))
+        .filter((p): p is Player => Boolean(p));
+      // Scramble: the team shares one score, so every teammate's array is
+      // identical -- just read it once. Best ball: the team's score is
+      // the lowest among teammates on each hole, summed across holes.
+      // Team total: the sum of teammates' own individual totals.
+      let total: number;
+      if (isScramble) {
+        total = totalFn(scores[memberIds[0]]);
+      } else if (teamGameType === "bestBall") {
+        total = course!.holes.slice(0, holesCount).reduce((sum, _h, holeIndex) => {
+          const holeScores = memberIds
+            .map((pid) => scores[pid]?.[holeIndex])
+            .filter((v): v is number => typeof v === "number");
+          return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
+        }, 0);
+      } else {
+        total = memberIds.reduce((sum, pid) => sum + totalFn(scores[pid]), 0);
+      }
+      return { teamIndex, members, total };
+    })
+      .filter((t) => t.members.length > 0)
+      .sort((a, b) => a.total - b.total);
+  }
+
+  const netStandings = isHandicapped ? buildNetStandings(liveTotal) : [];
+  const teamStandings = isTeam ? buildTeamStandings(liveTotal, activeHoleIndex) : [];
+  const finalNetStandings = isHandicapped ? buildNetStandings(finalTotal) : [];
+  const finalTeamStandings = isTeam
+    ? buildTeamStandings(finalTotal, course.holes.length)
     : [];
 
   // For individual rounds, keep the player list sorted by current standing
@@ -687,10 +712,32 @@ export function NewRoundPage() {
     const gross = liveTotal(scores[pid]);
     return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
   }
+  function finalPlayerScore(pid: string) {
+    const gross = finalTotal(scores[pid]);
+    return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
+  }
   const sortedPlayerIds = isTeam
     ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
     : [...playerIds].sort((a, b) => playerScore(a) - playerScore(b));
+  const finalSortedPlayerIds = isTeam
+    ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
+    : [...playerIds].sort((a, b) => finalPlayerScore(a) - finalPlayerScore(b));
   const teamsByIndex = [...teamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
+  const finalTeamsByIndex = [...finalTeamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
+
+  // One column per team for scramble (a shared score), otherwise one per
+  // player -- used for the review screen's hole-by-hole table.
+  const reviewColumns = isScramble
+    ? finalTeamsByIndex.map((team) => ({
+        key: `team-${team.teamIndex}`,
+        label: `Team ${team.teamIndex + 1}`,
+        pid: playerIds.find((pid) => (teamOf[pid] ?? 0) === team.teamIndex),
+      }))
+    : finalSortedPlayerIds.map((pid) => ({
+        key: pid,
+        label: players.find((p) => p.id === pid)?.name ?? "",
+        pid,
+      }));
 
   // Keep the active hole scrolled into view in the (horizontally scrolling,
   // not all holes fit at once) hole-picker strip, so advancing past the
@@ -698,6 +745,137 @@ export function NewRoundPage() {
   // you are.
   function scrollActiveHoleIntoView(el: HTMLButtonElement | null) {
     el?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }
+
+  if (step === 4) {
+    return (
+      <div>
+        <PageHeader title="New round" subtitle={`Review · ${course.name}`} />
+
+        {isHandicapped && (
+          <Card className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+              Net leaderboard
+            </p>
+            <div className="space-y-1.5">
+              {finalNetStandings.map((row, i) => (
+                <div key={row.pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: row.player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{row.player.name}</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500">
+                    {row.gross} − {row.allowance} ={" "}
+                    <span className="font-semibold text-slate-900">{row.net}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {isTeam && (
+          <Card className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+              Team leaderboard
+            </p>
+            <div className="space-y-2">
+              {finalTeamStandings.map((team, i) => {
+                const parBaseline =
+                  finalPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+                const rel = team.total - parBaseline;
+                return (
+                  <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 w-4">{i + 1}</span>
+                      <span className="font-medium text-slate-800">
+                        Team {team.teamIndex + 1}{" "}
+                        <span className="text-xs text-slate-400 font-normal">
+                          ({team.members.map((m) => m.name).join(", ")})
+                        </span>
+                      </span>
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        <Card className="mb-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 text-xs">
+                <th className="text-left font-medium pb-2 sticky left-0 bg-white pr-2">Hole</th>
+                {reviewColumns.map((col) => (
+                  <th key={col.key} className="font-medium pb-2 px-1 min-w-[56px]">
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {course.holes.map((h, i) => (
+                <tr key={h.number} className="border-t border-slate-100">
+                  <td className="py-1.5 sticky left-0 bg-white pr-2 whitespace-nowrap">
+                    {h.number}{" "}
+                    <span className="text-slate-400">
+                      (par {h.par}
+                      {h.distanceFt ? `, ${h.distanceFt}ft` : ""})
+                    </span>
+                  </td>
+                  {reviewColumns.map((col) => (
+                    <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
+                      {col.pid ? scores[col.pid]?.[i] ?? h.par : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 font-semibold">
+                <td className="py-1.5 sticky left-0 bg-white pr-2">Total</td>
+                {reviewColumns.map((col) => {
+                  const total = col.pid ? finalTotal(scores[col.pid]) : 0;
+                  const rel = col.pid ? finalRelToPar(scores[col.pid]) : 0;
+                  return (
+                    <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
+                      {total}{" "}
+                      <span className="text-slate-400 font-normal">
+                        ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
+          </table>
+        </Card>
+
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => setStep(3)}>
+            Edit round
+          </Button>
+          <Button className="flex-1" disabled={saving} onClick={handleSave}>
+            {saving ? "Finalizing…" : "Finalize round"}
+          </Button>
+        </div>
+        <button
+          type="button"
+          className="text-sm font-medium text-slate-400 mt-3 block mx-auto"
+          onClick={discardRound}
+        >
+          Discard round
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -862,10 +1040,9 @@ export function NewRoundPage() {
         </Button>
         <Button
           className="flex-1"
-          disabled={isLastHole && saving}
-          onClick={() => (isLastHole ? handleSave() : goToHole(activeHoleIndex + 1))}
+          onClick={() => (isLastHole ? setStep(4) : goToHole(activeHoleIndex + 1))}
         >
-          {isLastHole ? (saving ? "Finalizing…" : "Finalize round") : "Next hole"}
+          {isLastHole ? "Finish" : "Next hole"}
         </Button>
       </div>
       <button
