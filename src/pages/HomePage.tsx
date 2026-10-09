@@ -45,12 +45,14 @@ export function HomePage() {
       <IosInstallHint />
       <LegacyImportCard />
 
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <LinkButton to="/round/new">🥏 New round</LinkButton>
-        <LinkButton to="/courses/new" variant="secondary">
+      <LinkButton to="/round/new" className="text-lg py-5 mb-2">
+        🥏 New round
+      </LinkButton>
+      <p className="text-center text-sm mb-4">
+        <Link to="/courses/new" className="text-slate-500 font-medium">
           + Add course
-        </LinkButton>
-      </div>
+        </Link>
+      </p>
 
       {lastRound && lastCourse && (
         <Card className="mb-4">
