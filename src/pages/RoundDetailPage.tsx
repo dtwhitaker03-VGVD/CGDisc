@@ -68,6 +68,14 @@ export function RoundDetailPage() {
     return pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0);
   }
 
+  // Team rounds list players grouped by team (all of team 1, then all of
+  // team 2, ...) rather than original selection order -- teamGroups is
+  // already ordered by ascending team index (integer object keys iterate
+  // that way), so flattening it keeps that order.
+  const playerIdsForDisplay = round.teamAssignments
+    ? teamGroups.flatMap((t) => t.pids)
+    : round.playerIds;
+
   // One column per team for scramble (a shared score), otherwise one per
   // player -- used for both the hole-by-hole table and its header.
   const scoreColumns = isScramble
@@ -76,7 +84,7 @@ export function RoundDetailPage() {
         label: `Team ${team.teamIndex + 1}`,
         pids: team.pids,
       }))
-    : round.playerIds.map((pid) => ({
+    : playerIdsForDisplay.map((pid) => ({
         key: pid,
         label: playersById.get(pid)?.name ?? "",
         pids: [pid],
@@ -172,7 +180,12 @@ export function RoundDetailPage() {
               .map((team) => ({ ...team, total: teamTotal(team.pids) }))
               .sort((a, b) => a.total - b.total)
               .map((team, i) => {
-                const rel = team.total - coursePar(course);
+                // Team total sums every teammate's own score, so the fair
+                // par baseline for the team is par times the number of
+                // teammates (two players each at par nets "par x2", E).
+                const parBaseline =
+                  coursePar(course) * (round.teamGameType === "teamTotal" ? team.members.length : 1);
+                const rel = team.total - parBaseline;
                 return (
                   <div key={team.teamIndex} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
@@ -215,7 +228,7 @@ export function RoundDetailPage() {
                 </Card>
               );
             })
-          : round.playerIds.map((pid) => {
+          : playerIdsForDisplay.map((pid) => {
               const player = playersById.get(pid);
               const strokes = draftScores[pid];
               if (!player || !strokes) return null;
