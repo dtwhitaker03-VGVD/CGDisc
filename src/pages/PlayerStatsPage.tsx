@@ -52,26 +52,20 @@ export function PlayerStatsPage() {
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
 
+  const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
+  const holeCountsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
   const courseStatRows = [...totalsByCourse.entries()]
     .map(([courseId, totals]) => {
       const course = coursesById.get(courseId);
       const stats = computeScoreStats(totals);
-      if (!course || !stats) return null;
-      return { course, stats };
+      const counts = holeCountsByCourse.get(courseId);
+      if (!course || !stats || !counts) return null;
+      return { course, stats, counts };
     })
-    .filter((row): row is { course: Course; stats: ScoreStats } => Boolean(row))
-    .sort((a, b) => a.course.name.localeCompare(b.course.name));
-
-  const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
-  const holeCountsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
-  const courseHoleCountRows = [...holeCountsByCourse.entries()]
-    .map(([courseId, counts]) => {
-      const course = coursesById.get(courseId);
-      if (!course) return null;
-      return { course, counts };
-    })
-    .filter((row): row is { course: Course; counts: HoleCounts } => Boolean(row))
+    .filter(
+      (row): row is { course: Course; stats: ScoreStats; counts: HoleCounts } => Boolean(row),
+    )
     .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
   return (
@@ -146,62 +140,44 @@ export function PlayerStatsPage() {
 
       <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-          By course (hole scores)
-        </p>
-        {courseHoleCountRows.length === 0 ? (
-          <p className="text-sm text-slate-500">No rounds logged yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {courseHoleCountRows.map(({ course, counts }) => (
-              <li key={course.id}>
-                <Link to={`/stats/course/${course.id}`} className="block py-2.5">
-                  <p className="font-medium text-slate-800 text-sm mb-1">{course.name}</p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                    <span className="text-slate-500">{counts.aces} Ace</span>
-                    <span className="text-green-600">{counts.birdies} Birdie</span>
-                    <span className="text-slate-500">{counts.pars} Par</span>
-                    <span className="text-amber-600">{counts.bogeys} Bogey</span>
-                    <span className="text-red-600">{counts.doubleBogeys} Dbl</span>
-                    <span className="text-red-700">{counts.triplePlusBogeys} Tpl+</span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-          By course (low / avg / high)
+          By course
         </p>
         {courseStatRows.length === 0 ? (
           <p className="text-sm text-slate-500">No rounds logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {courseStatRows.map(({ course, stats }) => {
+            {courseStatRows.map(({ course, stats, counts }) => {
               const par = coursePar(course);
               return (
                 <li key={course.id}>
-                  <Link
-                    to={`/stats/course/${course.id}`}
-                    className="flex items-center justify-between py-2.5"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-800 text-sm">{course.name}</p>
-                      <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
+                  <Link to={`/stats/course/${course.id}`} className="block py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-slate-800 text-sm">
+                        {course.name}{" "}
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          · {stats.rounds} rounds
+                        </span>
+                      </p>
+                      <p className="text-sm tabular-nums text-right shrink-0">
+                        <span className="text-green-600 font-semibold">
+                          {stats.low} ({relToPar(stats.low, par)})
+                        </span>
+                        {" / "}
+                        <span className="text-slate-900 font-semibold">{stats.average}</span>
+                        {" / "}
+                        <span className="text-red-600 font-semibold">
+                          {stats.high} ({relToPar(stats.high, par)})
+                        </span>
+                      </p>
                     </div>
-                    <p className="text-sm tabular-nums text-right">
-                      <span className="text-green-600 font-semibold">
-                        {stats.low} ({relToPar(stats.low, par)})
-                      </span>
-                      {" / "}
-                      <span className="text-slate-900 font-semibold">{stats.average}</span>
-                      {" / "}
-                      <span className="text-red-600 font-semibold">
-                        {stats.high} ({relToPar(stats.high, par)})
-                      </span>
-                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1">
+                      <span className="text-slate-500">{counts.aces} Ace</span>
+                      <span className="text-green-600">{counts.birdies} Birdie</span>
+                      <span className="text-slate-500">{counts.pars} Par</span>
+                      <span className="text-amber-600">{counts.bogeys} Bogey</span>
+                      <span className="text-red-600">{counts.doubleBogeys} Dbl</span>
+                      <span className="text-red-700">{counts.triplePlusBogeys} Tpl+</span>
+                    </div>
                   </Link>
                 </li>
               );
