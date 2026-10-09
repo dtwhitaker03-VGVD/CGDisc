@@ -676,16 +676,19 @@ export function NewRoundPage() {
         .sort((a, b) => a.total - b.total)
     : [];
 
-  // Keep the player list sorted by current standing (lowest score first) so
-  // it's easy to see who's leading while entering scores. Team rounds keep
-  // selection order since they already have a team leaderboard above.
+  // For individual rounds, keep the player list sorted by current standing
+  // (lowest score first) so it's easy to see who's leading. Team rounds
+  // instead group players by team (all of team 1, then all of team 2, ...)
+  // so the list doesn't reshuffle hole to hole -- they already have a
+  // ranked team leaderboard above for that.
   function playerScore(pid: string) {
     const gross = liveTotal(scores[pid]);
     return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
   }
   const sortedPlayerIds = isTeam
-    ? playerIds
+    ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
     : [...playerIds].sort((a, b) => playerScore(a) - playerScore(b));
+  const teamsByIndex = [...teamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
 
   return (
     <div>
@@ -752,7 +755,12 @@ export function NewRoundPage() {
           </p>
           <div className="space-y-2">
             {teamStandings.map((team, i) => {
-              const rel = team.total - playedPar();
+              // Team total sums every teammate's own score, so the fair par
+              // baseline for the team is par times the number of teammates
+              // (two players each shooting par nets "par x2" raw, E relative).
+              const parBaseline =
+                playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+              const rel = team.total - parBaseline;
               return (
                 <div key={team.teamIndex} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
@@ -776,7 +784,7 @@ export function NewRoundPage() {
 
       <div className="space-y-2 mb-4">
         {isScramble
-          ? teamStandings.map((team) => {
+          ? teamsByIndex.map((team) => {
               const representativePid = playerIds.find(
                 (pid) => (teamOf[pid] ?? 0) === team.teamIndex,
               );
