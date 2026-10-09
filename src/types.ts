@@ -56,9 +56,12 @@ export interface Round {
    * - "bestBall": each player plays (and is scored) individually; their
    *   score counts toward handicap/rating as normal. The team's score is
    *   the lowest among teammates on each hole.
+   * - "teamTotal": each player plays (and is scored) individually, same as
+   *   bestBall and counting toward handicap/rating the same way, but the
+   *   team's score is the sum of teammates' scores rather than the low.
    * Older rounds saved before this existed have teamAssignments but no
    * teamGameType, and are treated like "scramble" for rating purposes
    * (excluded) to preserve their original behavior.
    */
-  teamGameType?: "scramble" | "bestBall";
+  teamGameType?: "scramble" | "bestBall" | "teamTotal";
 }

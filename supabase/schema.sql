@@ -55,11 +55,13 @@ create table if not exists public.rounds (
   -- Team rounds: playerId -> team index (0-based).
   team_assignments jsonb,
   -- How a team round is scored: 'scramble' (one shared score per team,
-  -- excluded from handicap/rating) or 'bestBall' (individual scores kept
-  -- and counted toward handicap/rating; team score is the per-hole low).
-  -- Null on rounds saved before this existed, and treated like 'scramble'
-  -- for rating purposes -- see playerDifferentials.
-  team_game_type text check (team_game_type in ('scramble', 'bestBall'))
+  -- excluded from handicap/rating), 'bestBall' (individual scores kept and
+  -- counted toward handicap/rating; team score is the per-hole low), or
+  -- 'teamTotal' (individual scores kept and counted toward handicap/rating,
+  -- same as bestBall; team score is the sum of teammates' scores). Null on
+  -- rounds saved before this existed, and treated like 'scramble' for
+  -- rating purposes -- see playerDifferentials.
+  team_game_type text check (team_game_type in ('scramble', 'bestBall', 'teamTotal'))
 );
 
 alter table public.rounds
@@ -73,7 +75,7 @@ alter table public.rounds
 
 alter table public.rounds
   add constraint rounds_team_game_type_check
-  check (team_game_type in ('scramble', 'bestBall'));
+  check (team_game_type in ('scramble', 'bestBall', 'teamTotal'));
 
 -- One row per player per round; strokes is the per-hole score array, same
 -- order as the course's holes at the time the round was played.
