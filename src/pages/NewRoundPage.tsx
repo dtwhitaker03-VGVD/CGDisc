@@ -916,6 +916,30 @@ export function NewRoundPage() {
   const teamsByIndex = [...teamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
   const finalTeamsByIndex = [...finalTeamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
 
+  // Honors: like real golf, whoever scores lowest on a hole goes first on
+  // the next one. Chaining one stable sort per completed hole (rather than
+  // one sort by cumulative total) means a tie keeps whoever already had
+  // honors, exactly like the real rule -- each pass only reorders players
+  // who are actually ahead/behind on that specific hole. Only applies to
+  // individual (non-team) rounds; the leaderboard itself is unaffected and
+  // keeps ranking by cumulative score.
+  function honorsOrder(ids: string[], holesCompleted: number): string[] {
+    let order = ids;
+    for (let h = 0; h < holesCompleted; h++) {
+      order = [...order].sort((a, b) => {
+        const sa = scores[a]?.[h];
+        const sb = scores[b]?.[h];
+        const va = typeof sa === "number" ? sa : Infinity;
+        const vb = typeof sb === "number" ? sb : Infinity;
+        return va - vb;
+      });
+    }
+    return order;
+  }
+  const honorsPlayerIds = isTeam
+    ? sortedPlayerIds
+    : honorsOrder(activePlayerIds, activeHoleIndex);
+
   // One column per team for scramble (a shared score), otherwise one per
   // player -- used for the review screen's hole-by-hole table.
   const reviewColumns = isScramble
@@ -1269,7 +1293,7 @@ export function NewRoundPage() {
                 </Card>
               );
             })
-          : sortedPlayerIds.map((pid) => {
+          : honorsPlayerIds.map((pid) => {
               const player = players.find((p) => p.id === pid);
               const playerScores = scores[pid];
               if (!player || !playerScores) return null;
