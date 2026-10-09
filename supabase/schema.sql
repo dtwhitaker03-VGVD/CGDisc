@@ -61,14 +61,29 @@ create table if not exists public.rounds (
   -- same as bestBall; team score is the sum of teammates' scores). Null on
   -- rounds saved before this existed, and treated like 'scramble' for
   -- rating purposes -- see playerDifferentials.
-  team_game_type text check (team_game_type in ('scramble', 'bestBall', 'teamTotal'))
+  team_game_type text check (team_game_type in ('scramble', 'bestBall', 'teamTotal')),
+  -- How the round's overall result is determined: 'strokes' (default when
+  -- null, lowest total wins as always) or 'holes' (match play -- whoever/
+  -- whichever team has the lowest score on a hole wins it; ties halve it).
+  -- Only meaningful for straight individual rounds and team rounds;
+  -- handicapped rounds always score by strokes. Individual strokes are
+  -- always recorded and still count toward handicap/rating either way.
+  scoring_method text check (scoring_method in ('strokes', 'holes'))
 );
 
 alter table public.rounds
   add column if not exists handicapped boolean not null default false,
   add column if not exists handicap_allowances jsonb,
   add column if not exists team_assignments jsonb,
-  add column if not exists team_game_type text;
+  add column if not exists team_game_type text,
+  add column if not exists scoring_method text;
+
+alter table public.rounds
+  drop constraint if exists rounds_scoring_method_check;
+
+alter table public.rounds
+  add constraint rounds_scoring_method_check
+  check (scoring_method in ('strokes', 'holes'));
 
 alter table public.rounds
   drop constraint if exists rounds_team_game_type_check;
