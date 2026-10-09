@@ -8,7 +8,14 @@ import {
   scoreToPar,
   totalScore,
 } from "../lib/ratings";
-import { computeScoreStats, playerTotalsByCourse, type ScoreStats } from "../lib/stats";
+import {
+  computeScoreStats,
+  playerHoleCounts,
+  playerHoleCountsByCourse,
+  playerTotalsByCourse,
+  type HoleCounts,
+  type ScoreStats,
+} from "../lib/stats";
 import { RatingChart } from "../components/RatingChart";
 import { Card, PageHeader } from "../components/ui";
 import type { Course } from "../types";
@@ -56,6 +63,17 @@ export function PlayerStatsPage() {
     .filter((row): row is { course: Course; stats: ScoreStats } => Boolean(row))
     .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
+  const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
+  const holeCountsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
+  const courseHoleCountRows = [...holeCountsByCourse.entries()]
+    .map(([courseId, counts]) => {
+      const course = coursesById.get(courseId);
+      if (!course) return null;
+      return { course, counts };
+    })
+    .filter((row): row is { course: Course; counts: HoleCounts } => Boolean(row))
+    .sort((a, b) => a.course.name.localeCompare(b.course.name));
+
   return (
     <div>
       <PageHeader
@@ -81,6 +99,76 @@ export function PlayerStatsPage() {
           Rating trend
         </p>
         <RatingChart points={chartPoints} color={player.color} />
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+          Lifetime hole scores
+        </p>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <p className="text-xl font-bold tabular-nums">{lifetimeHoleCounts.aces}</p>
+            <p className="text-[11px] text-slate-400">Aces</p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums text-green-600">
+              {lifetimeHoleCounts.birdies}
+            </p>
+            <p className="text-[11px] text-slate-400">Birdies</p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums">{lifetimeHoleCounts.pars}</p>
+            <p className="text-[11px] text-slate-400">Pars</p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums text-amber-600">
+              {lifetimeHoleCounts.bogeys}
+            </p>
+            <p className="text-[11px] text-slate-400">Bogeys</p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums text-red-600">
+              {lifetimeHoleCounts.doubleBogeys}
+            </p>
+            <p className="text-[11px] text-slate-400">Double bogeys</p>
+          </div>
+          <div>
+            <p className="text-xl font-bold tabular-nums text-red-700">
+              {lifetimeHoleCounts.triplePlusBogeys}
+            </p>
+            <p className="text-[11px] text-slate-400">Triple+ bogeys</p>
+          </div>
+        </div>
+        <p className="text-center text-[11px] text-slate-400 mt-3">
+          {lifetimeHoleCounts.holesPlayed} holes played
+        </p>
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          By course (hole scores)
+        </p>
+        {courseHoleCountRows.length === 0 ? (
+          <p className="text-sm text-slate-500">No rounds logged yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {courseHoleCountRows.map(({ course, counts }) => (
+              <li key={course.id}>
+                <Link to={`/stats/course/${course.id}`} className="block py-2.5">
+                  <p className="font-medium text-slate-800 text-sm mb-1">{course.name}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                    <span className="text-slate-500">{counts.aces} Ace</span>
+                    <span className="text-green-600">{counts.birdies} Birdie</span>
+                    <span className="text-slate-500">{counts.pars} Par</span>
+                    <span className="text-amber-600">{counts.bogeys} Bogey</span>
+                    <span className="text-red-600">{counts.doubleBogeys} Dbl</span>
+                    <span className="text-red-700">{counts.triplePlusBogeys} Tpl+</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="mb-4">
