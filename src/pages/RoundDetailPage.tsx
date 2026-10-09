@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
-import { roundRating, scoreToPar, totalScore } from "../lib/ratings";
+import { coursePar, roundRating, scoreToPar, totalScore } from "../lib/ratings";
 import { Button, Card, PageHeader } from "../components/ui";
 
 export function RoundDetailPage() {
@@ -32,7 +32,10 @@ export function RoundDetailPage() {
   }
 
   const isScramble = Boolean(round.teamAssignments) && round.teamGameType === "scramble";
-  const showsIndividualRating = !round.teamAssignments || round.teamGameType === "bestBall";
+  const showsIndividualRating =
+    !round.teamAssignments ||
+    round.teamGameType === "bestBall" ||
+    round.teamGameType === "teamTotal";
 
   const teamGroups = round.teamAssignments
     ? Object.entries(
@@ -60,8 +63,8 @@ export function RoundDetailPage() {
         return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
       }, 0);
     }
-    // Legacy team rounds predating teamGameType kept their original sum-of-
-    // individual-totals display.
+    // "teamTotal" rounds, and legacy team rounds predating teamGameType,
+    // both show the sum of individual totals.
     return pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0);
   }
 
@@ -116,6 +119,7 @@ export function RoundDetailPage() {
               Team round
               {round.teamGameType === "scramble" && " · Scramble"}
               {round.teamGameType === "bestBall" && " · Best ball"}
+              {round.teamGameType === "teamTotal" && " · Team total"}
             </span>
           ) : undefined
         }
@@ -167,20 +171,25 @@ export function RoundDetailPage() {
             {teamGroups
               .map((team) => ({ ...team, total: teamTotal(team.pids) }))
               .sort((a, b) => a.total - b.total)
-              .map((team, i) => (
-                <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="text-slate-400 w-4">{i + 1}</span>
-                    <span className="font-medium text-slate-800">
-                      Team {team.teamIndex + 1}{" "}
-                      <span className="text-xs text-slate-400 font-normal">
-                        ({team.members.map((m) => m.name).join(", ")})
+              .map((team, i) => {
+                const rel = team.total - coursePar(course);
+                return (
+                  <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 w-4">{i + 1}</span>
+                      <span className="font-medium text-slate-800">
+                        Team {team.teamIndex + 1}{" "}
+                        <span className="text-xs text-slate-400 font-normal">
+                          ({team.members.map((m) => m.name).join(", ")})
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <span className="font-semibold text-slate-900 tabular-nums">{team.total}</span>
-                </div>
-              ))}
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </Card>
       )}

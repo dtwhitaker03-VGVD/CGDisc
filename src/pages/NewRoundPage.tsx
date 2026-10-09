@@ -4,6 +4,7 @@ import { useAppData } from "../store/AppDataContext";
 import {
   computeHandicap,
   computeHandicapAllowances,
+  coursePar,
   playerDifferentials,
   scoreToPar,
   totalScore,
@@ -31,7 +32,7 @@ interface RoundDraft {
   roundMode: "straight" | "handicapped" | "team";
   teamOf: Record<string, number>;
   teamCount: number;
-  teamGameType: "scramble" | "bestBall";
+  teamGameType: "scramble" | "bestBall" | "teamTotal";
 }
 
 function loadDraft(): RoundDraft | null {
@@ -74,7 +75,9 @@ export function NewRoundPage() {
   const [roundMode, setRoundMode] = useState<"straight" | "handicapped" | "team">("straight");
   const [teamOf, setTeamOf] = useState<Record<string, number>>({});
   const [teamCount, setTeamCount] = useState(2);
-  const [teamGameType, setTeamGameType] = useState<"scramble" | "bestBall">("bestBall");
+  const [teamGameType, setTeamGameType] = useState<"scramble" | "bestBall" | "teamTotal">(
+    "bestBall",
+  );
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -493,11 +496,24 @@ export function NewRoundPage() {
                   >
                     Best ball
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeamGameType("teamTotal")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      teamGameType === "teamTotal"
+                        ? "bg-green-700 text-white"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    Team total
+                  </button>
                 </div>
                 <p className="text-xs text-slate-400 mb-3">
                   {teamGameType === "scramble"
                     ? "Teammates share one ball -- enter a single score per team each hole. Doesn't count toward anyone's handicap or rating."
-                    : "Each player plays their own disc and is scored individually, counting toward handicap/rating as usual. The team's score shown is the lowest between teammates on each hole."}
+                    : teamGameType === "bestBall"
+                      ? "Each player plays their own disc and is scored individually, counting toward handicap/rating as usual. The team's score shown is the lowest between teammates on each hole."
+                      : "Each player plays their own disc and is scored individually, counting toward handicap/rating as usual. The team's score shown is the sum of teammates' scores."}
                 </p>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-slate-700">Number of teams</span>
@@ -626,14 +642,20 @@ export function NewRoundPage() {
         // Scramble: the team shares one score, so every teammate's array is
         // identical -- just read it once. Best ball: the team's score is
         // the lowest among teammates on each hole, summed across holes.
-        const total = isScramble
-          ? totalScore(scores[memberIds[0]] ?? [])
-          : course.holes.reduce((sum, _h, holeIndex) => {
-              const holeScores = memberIds
-                .map((pid) => scores[pid]?.[holeIndex])
-                .filter((v): v is number => typeof v === "number");
-              return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
-            }, 0);
+        // Team total: the sum of teammates' own individual totals.
+        let total: number;
+        if (isScramble) {
+          total = totalScore(scores[memberIds[0]] ?? []);
+        } else if (teamGameType === "bestBall") {
+          total = course.holes.reduce((sum, _h, holeIndex) => {
+            const holeScores = memberIds
+              .map((pid) => scores[pid]?.[holeIndex])
+              .filter((v): v is number => typeof v === "number");
+            return sum + (holeScores.length > 0 ? Math.min(...holeScores) : 0);
+          }, 0);
+        } else {
+          total = memberIds.reduce((sum, pid) => sum + totalScore(scores[pid] ?? []), 0);
+        }
         return { teamIndex, members, total };
       })
         .filter((t) => t.members.length > 0)
@@ -715,20 +737,25 @@ export function NewRoundPage() {
             Team leaderboard
           </p>
           <div className="space-y-2">
-            {teamStandings.map((team, i) => (
-              <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="text-slate-400 w-4">{i + 1}</span>
-                  <span className="font-medium text-slate-800">
-                    Team {team.teamIndex + 1}{" "}
-                    <span className="text-xs text-slate-400 font-normal">
-                      ({team.members.map((m) => m.name).join(", ")})
+            {teamStandings.map((team, i) => {
+              const rel = team.total - coursePar(course);
+              return (
+                <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span className="font-medium text-slate-800">
+                      Team {team.teamIndex + 1}{" "}
+                      <span className="text-xs text-slate-400 font-normal">
+                        ({team.members.map((m) => m.name).join(", ")})
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="font-semibold text-slate-900 tabular-nums">{team.total}</span>
-              </div>
-            ))}
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}

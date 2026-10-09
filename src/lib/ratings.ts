@@ -97,9 +97,12 @@ export function playerDifferentials(
   const out: Differential[] = [];
   for (const round of rounds) {
     // Scramble (and legacy team rounds with no recorded game type) share one
-    // score across the team, so they're excluded. Best-ball rounds keep each
-    // player's own individual score, so they count like a normal round.
-    if (round.teamAssignments && round.teamGameType !== "bestBall") continue;
+    // score across the team, so they're excluded. Best-ball and team-total
+    // rounds keep each player's own individual score, so they count like a
+    // normal round -- only how the team's own score is aggregated differs.
+    const isIndividuallyScored =
+      round.teamGameType === "bestBall" || round.teamGameType === "teamTotal";
+    if (round.teamAssignments && !isIndividuallyScored) continue;
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!strokes || !course || strokes.length === 0) continue;
