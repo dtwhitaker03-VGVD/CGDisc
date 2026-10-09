@@ -908,6 +908,37 @@ export function NewRoundPage() {
           </Card>
         )}
 
+        {roundMode === "straight" && !isHolesScoring && (
+          <Card className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+              Leaderboard
+            </p>
+            <div className="space-y-1.5">
+              {finalSortedPlayerIds.map((pid, i) => {
+                const player = players.find((p) => p.id === pid);
+                if (!player) return null;
+                const total = finalTotal(scores[pid]);
+                const rel = finalRelToPar(scores[pid]);
+                return (
+                  <div key={pid} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 w-4">{i + 1}</span>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: player.color }}
+                      />
+                      <span className="font-medium text-slate-800">{player.name}</span>
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         {roundMode === "straight" && isHolesScoring && (
           <Card className="mb-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -1122,6 +1153,37 @@ export function NewRoundPage() {
                 </span>
               </div>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {roundMode === "straight" && !isHolesScoring && (
+        <Card className="mb-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Leaderboard
+          </p>
+          <div className="space-y-1.5">
+            {sortedPlayerIds.map((pid, i) => {
+              const player = players.find((p) => p.id === pid);
+              if (!player) return null;
+              const total = liveTotal(scores[pid]);
+              const rel = liveRelToPar(scores[pid]);
+              return (
+                <div key={pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{player.name}</span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
