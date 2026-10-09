@@ -1131,149 +1131,6 @@ export function NewRoundPage() {
         </p>
       </Card>
 
-      {isHandicapped && (
-        <Card className="mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Net leaderboard
-          </p>
-          <div className="space-y-1.5">
-            {netStandings.map((row, i) => (
-              <div key={row.pid} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span className="text-slate-400 w-4">{i + 1}</span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: row.player.color }}
-                  />
-                  <span className="font-medium text-slate-800">{row.player.name}</span>
-                </span>
-                <span className="tabular-nums text-slate-500">
-                  {row.gross} − {row.allowance} ={" "}
-                  <span className="font-semibold text-slate-900">{row.net}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {roundMode === "straight" && !isHolesScoring && (
-        <Card className="mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Leaderboard
-          </p>
-          <div className="space-y-1.5">
-            {sortedPlayerIds.map((pid, i) => {
-              const player = players.find((p) => p.id === pid);
-              if (!player) return null;
-              const total = liveTotal(scores[pid]);
-              const rel = liveRelToPar(scores[pid]);
-              return (
-                <div key={pid} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="text-slate-400 w-4">{i + 1}</span>
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: player.color }}
-                    />
-                    <span className="font-medium text-slate-800">{player.name}</span>
-                  </span>
-                  <span className="font-semibold text-slate-900 tabular-nums">
-                    {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {roundMode === "straight" && isHolesScoring && (
-        <Card className="mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Holes won
-          </p>
-          <div className="space-y-1.5">
-            {holeWins.map((row, i) => {
-              const rel = liveRelToPar(scores[row.pid]);
-              return (
-                <div key={row.pid} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="text-slate-400 w-4">{i + 1}</span>
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: row.player.color }}
-                    />
-                    <span className="font-medium text-slate-800">{row.player.name}</span>
-                  </span>
-                  <span className="font-semibold text-slate-900 tabular-nums">
-                    {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {isTeam && (
-        <Card className="mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Team leaderboard
-          </p>
-          <div className="space-y-2">
-            {isHolesScoring
-              ? teamHoleWins.map((team, i) => {
-                  const standing = teamStandings.find((t) => t.teamIndex === team.teamIndex);
-                  const parBaseline =
-                    playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
-                  const rel = (standing?.total ?? 0) - parBaseline;
-                  return (
-                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="text-slate-400 w-4">{i + 1}</span>
-                        <span className="font-medium text-slate-800">
-                          Team {team.teamIndex + 1}{" "}
-                          <span className="text-xs text-slate-400 font-normal">
-                            ({team.members.map((m) => m.name).join(", ")})
-                          </span>
-                        </span>
-                      </span>
-                      <span className="font-semibold text-slate-900 tabular-nums">
-                        {team.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                      </span>
-                    </div>
-                  );
-                })
-              : teamStandings.map((team, i) => {
-                  // Team total sums every teammate's own score, so the fair
-                  // par baseline for the team is par times the number of
-                  // teammates (two players each shooting par nets "par x2"
-                  // raw, E relative).
-                  const parBaseline =
-                    playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
-                  const rel = team.total - parBaseline;
-                  return (
-                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="text-slate-400 w-4">{i + 1}</span>
-                        <span className="font-medium text-slate-800">
-                          Team {team.teamIndex + 1}{" "}
-                          <span className="text-xs text-slate-400 font-normal">
-                            ({team.members.map((m) => m.name).join(", ")})
-                          </span>
-                        </span>
-                      </span>
-                      <span className="font-semibold text-slate-900 tabular-nums">
-                        {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                      </span>
-                    </div>
-                  );
-                })}
-          </div>
-        </Card>
-      )}
-
       <div className="space-y-2 mb-4">
         {isScramble
           ? teamsByIndex.map((team) => {
@@ -1348,6 +1205,150 @@ export function NewRoundPage() {
           {isLastHole ? "Finish" : "Next hole"}
         </Button>
       </div>
+
+      {isHandicapped && (
+        <Card className="mb-3 mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Net leaderboard
+          </p>
+          <div className="space-y-1.5">
+            {netStandings.map((row, i) => (
+              <div key={row.pid} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="text-slate-400 w-4">{i + 1}</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: row.player.color }}
+                  />
+                  <span className="font-medium text-slate-800">{row.player.name}</span>
+                </span>
+                <span className="tabular-nums text-slate-500">
+                  {row.gross} − {row.allowance} ={" "}
+                  <span className="font-semibold text-slate-900">{row.net}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {roundMode === "straight" && !isHolesScoring && (
+        <Card className="mb-3 mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Leaderboard
+          </p>
+          <div className="space-y-1.5">
+            {sortedPlayerIds.map((pid, i) => {
+              const player = players.find((p) => p.id === pid);
+              if (!player) return null;
+              const total = liveTotal(scores[pid]);
+              const rel = liveRelToPar(scores[pid]);
+              return (
+                <div key={pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{player.name}</span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {roundMode === "straight" && isHolesScoring && (
+        <Card className="mb-3 mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Holes won
+          </p>
+          <div className="space-y-1.5">
+            {holeWins.map((row, i) => {
+              const rel = liveRelToPar(scores[row.pid]);
+              return (
+                <div key={row.pid} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className="text-slate-400 w-4">{i + 1}</span>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: row.player.color }}
+                    />
+                    <span className="font-medium text-slate-800">{row.player.name}</span>
+                  </span>
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {isTeam && (
+        <Card className="mb-3 mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Team leaderboard
+          </p>
+          <div className="space-y-2">
+            {isHolesScoring
+              ? teamHoleWins.map((team, i) => {
+                  const standing = teamStandings.find((t) => t.teamIndex === team.teamIndex);
+                  const parBaseline =
+                    playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+                  const rel = (standing?.total ?? 0) - parBaseline;
+                  return (
+                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-slate-400 w-4">{i + 1}</span>
+                        <span className="font-medium text-slate-800">
+                          Team {team.teamIndex + 1}{" "}
+                          <span className="text-xs text-slate-400 font-normal">
+                            ({team.members.map((m) => m.name).join(", ")})
+                          </span>
+                        </span>
+                      </span>
+                      <span className="font-semibold text-slate-900 tabular-nums">
+                        {team.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                      </span>
+                    </div>
+                  );
+                })
+              : teamStandings.map((team, i) => {
+                  // Team total sums every teammate's own score, so the fair
+                  // par baseline for the team is par times the number of
+                  // teammates (two players each shooting par nets "par x2"
+                  // raw, E relative).
+                  const parBaseline =
+                    playedPar() * (teamGameType === "teamTotal" ? team.members.length : 1);
+                  const rel = team.total - parBaseline;
+                  return (
+                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-slate-400 w-4">{i + 1}</span>
+                        <span className="font-medium text-slate-800">
+                          Team {team.teamIndex + 1}{" "}
+                          <span className="text-xs text-slate-400 font-normal">
+                            ({team.members.map((m) => m.name).join(", ")})
+                          </span>
+                        </span>
+                      </span>
+                      <span className="font-semibold text-slate-900 tabular-nums">
+                        {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                      </span>
+                    </div>
+                  );
+                })}
+          </div>
+        </Card>
+      )}
+
       <button
         type="button"
         className="text-sm font-medium text-slate-400 mt-3 block mx-auto"
