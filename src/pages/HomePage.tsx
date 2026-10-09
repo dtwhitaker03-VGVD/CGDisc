@@ -67,8 +67,8 @@ export function HomePage() {
                 const strokes = lastRound.scores[pid];
                 const player = players.find((p) => p.id === pid);
                 if (!strokes || !player) return null;
-                const rel = scoreToPar(strokes, lastCourse);
-                const rating = roundRating(strokes, lastCourse);
+                const droppedAt = lastRound.droppedPlayers?.[pid];
+                const rel = scoreToPar(strokes, lastCourse, droppedAt);
                 return (
                   <div key={pid} className="text-sm">
                     <span className="font-medium" style={{ color: player.color }}>
@@ -77,7 +77,12 @@ export function HomePage() {
                     <span className="tabular-nums">
                       {rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel}
                     </span>{" "}
-                    <span className="text-slate-400">· rating {rating}</span>
+                    <span className="text-slate-400">
+                      ·{" "}
+                      {droppedAt !== undefined
+                        ? `left after hole ${droppedAt}`
+                        : `rating ${roundRating(strokes, lastCourse)}`}
+                    </span>
                   </div>
                 );
               })}

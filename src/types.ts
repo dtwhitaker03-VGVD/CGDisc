@@ -76,4 +76,13 @@ export interface Round {
    *   recorded and still count toward handicap/rating as normal.
    */
   scoringMethod?: "strokes" | "holes";
+  /**
+   * playerId -> how many holes they played before leaving the round early.
+   * Their recorded score through that many holes still counts (lifetime
+   * hole stats, the saved scorecard), but the round is excluded from their
+   * handicap/rating and from course low/avg/high stats since it isn't a
+   * complete round to compare against full ones. Only straight and
+   * handicapped individual rounds support this (not team rounds).
+   */
+  droppedPlayers?: Record<string, number>;
 }

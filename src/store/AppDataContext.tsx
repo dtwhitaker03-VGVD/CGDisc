@@ -53,6 +53,7 @@ interface RoundRow {
   team_assignments: Record<string, number> | null;
   team_game_type: "scramble" | "bestBall" | "teamTotal" | null;
   scoring_method: "strokes" | "holes" | null;
+  dropped_players: Record<string, number> | null;
 }
 
 interface RoundScoreRow {
@@ -107,6 +108,7 @@ function mapRounds(roundRows: RoundRow[], scoreRows: RoundScoreRow[]): Round[] {
       teamAssignments: r.team_assignments ?? undefined,
       teamGameType: r.team_game_type ?? undefined,
       scoringMethod: r.scoring_method ?? undefined,
+      droppedPlayers: r.dropped_players ?? undefined,
     };
   });
 }
@@ -258,6 +260,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           team_assignments: input.teamAssignments ?? null,
           team_game_type: input.teamGameType ?? null,
           scoring_method: input.scoringMethod ?? null,
+          dropped_players: input.droppedPlayers ?? null,
         })
         .select()
         .single();
@@ -285,6 +288,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         teamAssignments: input.teamAssignments,
         teamGameType: input.teamGameType,
         scoringMethod: input.scoringMethod,
+        droppedPlayers: input.droppedPlayers,
       };
     };
 
@@ -305,6 +309,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       if (patch.scoringMethod !== undefined) {
         dbPatch.scoring_method = patch.scoringMethod ?? null;
+      }
+      if (patch.droppedPlayers !== undefined) {
+        dbPatch.dropped_players = patch.droppedPlayers ?? null;
       }
       if (Object.keys(dbPatch).length > 0) {
         const { error } = await supabase.from("rounds").update(dbPatch).eq("id", id);

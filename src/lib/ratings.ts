@@ -2,16 +2,18 @@ import type { Course, Round } from "../types";
 
 export const DEFAULT_POINTS_PER_THROW = 10;
 
-export function coursePar(course: Course): number {
-  return course.holes.reduce((sum, h) => sum + h.par, 0);
+/** Pass holesCount to get the par for only the first N holes (e.g. for a
+ * player who left early and only played part of the course). */
+export function coursePar(course: Course, holesCount: number = course.holes.length): number {
+  return course.holes.slice(0, holesCount).reduce((sum, h) => sum + h.par, 0);
 }
 
 export function totalScore(strokes: number[]): number {
   return strokes.reduce((sum, s) => sum + (Number.isFinite(s) ? s : 0), 0);
 }
 
-export function scoreToPar(strokes: number[], course: Course): number {
-  return totalScore(strokes) - coursePar(course);
+export function scoreToPar(strokes: number[], course: Course, holesCount?: number): number {
+  return totalScore(strokes) - coursePar(course, holesCount);
 }
 
 /**
@@ -103,6 +105,10 @@ export function playerDifferentials(
     const isIndividuallyScored =
       round.teamGameType === "bestBall" || round.teamGameType === "teamTotal";
     if (round.teamAssignments && !isIndividuallyScored) continue;
+    // A player who left early only played part of the course, so their
+    // score isn't comparable to a full round -- exclude it entirely rather
+    // than skew the handicap with a short, lower total.
+    if (round.droppedPlayers?.[playerId] !== undefined) continue;
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!strokes || !course || strokes.length === 0) continue;

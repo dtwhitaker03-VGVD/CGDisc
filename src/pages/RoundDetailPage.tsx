@@ -32,6 +32,13 @@ export function RoundDetailPage() {
     );
   }
 
+  // A player who left early only played part of the course, so par
+  // comparisons for them have to stop at the hole they left on instead of
+  // the full round.
+  function effectiveHolesFor(pid: string): number {
+    return round!.droppedPlayers?.[pid] ?? course!.holes.length;
+  }
+
   const isScramble = Boolean(round.teamAssignments) && round.teamGameType === "scramble";
   const showsIndividualRating =
     !round.teamAssignments ||
@@ -98,7 +105,12 @@ export function RoundDetailPage() {
             const player = playersById.get(pid);
             const strokes = draftScores[pid];
             if (!player || !strokes) return null;
-            return { pid, player, total: totalScore(strokes), rel: scoreToPar(strokes, course) };
+            return {
+              pid,
+              player,
+              total: totalScore(strokes),
+              rel: scoreToPar(strokes, course, effectiveHolesFor(pid)),
+            };
           })
           .filter((row): row is NonNullable<typeof row> => Boolean(row))
           .sort((a, b) => a.total - b.total)
@@ -190,6 +202,16 @@ export function RoundDetailPage() {
         }
       />
 
+      {round.droppedPlayers && Object.keys(round.droppedPlayers).length > 0 && (
+        <Card className="mb-4 bg-amber-50 border-amber-200">
+          <p className="text-xs text-amber-800">
+            {Object.entries(round.droppedPlayers)
+              .map(([pid, n]) => `${playersById.get(pid)?.name ?? "Someone"} left after hole ${n}`)
+              .join(" · ")}
+          </p>
+        </Card>
+      )}
+
       {round.handicapped && round.handicapAllowances && (
         <Card className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -203,7 +225,7 @@ export function RoundDetailPage() {
                 if (!player || !strokes) return null;
                 const gross = totalScore(strokes);
                 const allowance = round.handicapAllowances?.[pid] ?? 0;
-                const grossRelToPar = scoreToPar(strokes, course);
+                const grossRelToPar = scoreToPar(strokes, course, effectiveHolesFor(pid));
                 const netRelToPar = grossRelToPar - allowance;
                 return { pid, player, gross, grossRelToPar, netRelToPar };
               })
@@ -218,6 +240,11 @@ export function RoundDetailPage() {
                       style={{ backgroundColor: row.player.color }}
                     />
                     <span className="font-medium text-slate-800">{row.player.name}</span>
+                    {round.droppedPlayers?.[row.pid] !== undefined && (
+                      <span className="text-[10px] text-amber-600 font-normal">
+                        left h{round.droppedPlayers[row.pid]}
+                      </span>
+                    )}
                   </span>
                   <span className="tabular-nums text-slate-500">
                     {`${row.gross} · (${
@@ -256,6 +283,11 @@ export function RoundDetailPage() {
                     style={{ backgroundColor: row.player.color }}
                   />
                   <span className="font-medium text-slate-800">{row.player.name}</span>
+                  {round.droppedPlayers?.[row.pid] !== undefined && (
+                    <span className="text-[10px] text-amber-600 font-normal">
+                      left h{round.droppedPlayers[row.pid]}
+                    </span>
+                  )}
                 </span>
                 <span className="font-semibold text-slate-900 tabular-nums">
                   {row.total} ({row.rel === 0 ? "E" : row.rel > 0 ? `+${row.rel}` : row.rel})
@@ -273,7 +305,7 @@ export function RoundDetailPage() {
           </p>
           <div className="space-y-1.5">
             {playerHoleWinRows.map((row, i) => {
-              const rel = scoreToPar(draftScores[row.pid] ?? [], course);
+              const rel = scoreToPar(draftScores[row.pid] ?? [], course, effectiveHolesFor(row.pid));
               return (
                 <div key={row.pid} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
@@ -283,6 +315,11 @@ export function RoundDetailPage() {
                       style={{ backgroundColor: row.player.color }}
                     />
                     <span className="font-medium text-slate-800">{row.player.name}</span>
+                    {round.droppedPlayers?.[row.pid] !== undefined && (
+                      <span className="text-[10px] text-amber-600 font-normal">
+                        left h{round.droppedPlayers[row.pid]}
+                      </span>
+                    )}
                   </span>
                   <span className="font-semibold text-slate-900 tabular-nums">
                     {row.holesWon} won ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
@@ -388,7 +425,8 @@ export function RoundDetailPage() {
               const player = playersById.get(pid);
               const strokes = draftScores[pid];
               if (!player || !strokes) return null;
-              const rel = scoreToPar(strokes, course);
+              const droppedAt = round.droppedPlayers?.[pid];
+              const rel = scoreToPar(strokes, course, effectiveHolesFor(pid));
               return (
                 <Card key={pid}>
                   <p className="font-medium text-sm" style={{ color: player.color }}>
@@ -400,8 +438,12 @@ export function RoundDetailPage() {
                       ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                     </span>
                   </p>
-                  {showsIndividualRating && (
-                    <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
+                  {droppedAt !== undefined ? (
+                    <p className="text-xs text-amber-600">Left after hole {droppedAt}</p>
+                  ) : (
+                    showsIndividualRating && (
+                      <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
+                    )
                   )}
                 </Card>
               );
@@ -416,6 +458,11 @@ export function RoundDetailPage() {
               {scoreColumns.map((col) => (
                 <th key={col.key} className="font-medium pb-2 px-1 min-w-[56px]">
                   {col.label}
+                  {round.droppedPlayers?.[col.pids[0]] !== undefined && (
+                    <span className="block text-[10px] text-amber-600 font-normal normal-case">
+                      left h{round.droppedPlayers[col.pids[0]]}
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -431,7 +478,19 @@ export function RoundDetailPage() {
                   </span>
                 </td>
                 {scoreColumns.map((col) => {
+                  const droppedAt = round.droppedPlayers?.[col.pids[0]];
+                  const leftBeforeThisHole = droppedAt !== undefined && i >= droppedAt;
                   const value = draftScores[col.pids[0]]?.[i] ?? hole.par;
+                  if (leftBeforeThisHole) {
+                    return (
+                      <td
+                        key={col.key}
+                        className="px-1 py-1.5 text-center tabular-nums text-slate-300"
+                      >
+                        —
+                      </td>
+                    );
+                  }
                   return editing ? (
                     <td key={col.key} className="px-1 py-1.5 text-center">
                       <input

@@ -31,6 +31,7 @@ export function courseTotalsByPlayer(courseId: string, rounds: Round[]): Map<str
   for (const round of rounds) {
     if (round.courseId !== courseId) continue;
     for (const playerId of round.playerIds) {
+      if (round.droppedPlayers?.[playerId] !== undefined) continue;
       const total = validRoundTotal(round.scores[playerId]);
       if (total === null) continue;
       const list = byPlayer.get(playerId) ?? [];
@@ -45,6 +46,7 @@ export function courseTotalsByPlayer(courseId: string, rounds: Round[]): Map<str
 export function playerTotalsByCourse(playerId: string, rounds: Round[]): Map<string, number[]> {
   const byCourse = new Map<string, number[]>();
   for (const round of rounds) {
+    if (round.droppedPlayers?.[playerId] !== undefined) continue;
     const total = validRoundTotal(round.scores[playerId]);
     if (total === null) continue;
     const list = byCourse.get(round.courseId) ?? [];

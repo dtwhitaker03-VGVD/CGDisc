@@ -68,7 +68,13 @@ create table if not exists public.rounds (
   -- Only meaningful for straight individual rounds and team rounds;
   -- handicapped rounds always score by strokes. Individual strokes are
   -- always recorded and still count toward handicap/rating either way.
-  scoring_method text check (scoring_method in ('strokes', 'holes'))
+  scoring_method text check (scoring_method in ('strokes', 'holes')),
+  -- playerId -> how many holes they played before leaving the round early.
+  -- Their score through that many holes still counts (lifetime hole
+  -- stats, the saved scorecard), but the round is excluded from their
+  -- handicap/rating and from course low/avg/high stats. Only straight and
+  -- handicapped individual rounds support this (not team rounds).
+  dropped_players jsonb
 );
 
 alter table public.rounds
@@ -76,7 +82,8 @@ alter table public.rounds
   add column if not exists handicap_allowances jsonb,
   add column if not exists team_assignments jsonb,
   add column if not exists team_game_type text,
-  add column if not exists scoring_method text;
+  add column if not exists scoring_method text,
+  add column if not exists dropped_players jsonb;
 
 alter table public.rounds
   drop constraint if exists rounds_scoring_method_check;

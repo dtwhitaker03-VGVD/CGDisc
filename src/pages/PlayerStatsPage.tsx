@@ -43,7 +43,7 @@ export function PlayerStatsPage() {
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   const chartPoints = playerRounds
-    .filter((r) => !r.teamAssignments)
+    .filter((r) => !r.teamAssignments && r.droppedPlayers?.[player.id] === undefined)
     .map((r) => ({
       date: r.date,
       rating: roundRating(r.scores[player.id], coursesById.get(r.courseId)!),
@@ -197,7 +197,8 @@ export function PlayerStatsPage() {
             {[...playerRounds].reverse().map((r) => {
               const course = coursesById.get(r.courseId)!;
               const strokes = r.scores[player.id];
-              const rel = scoreToPar(strokes, course);
+              const droppedAt = r.droppedPlayers?.[player.id];
+              const rel = scoreToPar(strokes, course, droppedAt);
               return (
                 <li key={r.id}>
                   <Link to={`/round/${r.id}`} className="flex items-center justify-between py-2.5">
@@ -210,7 +211,11 @@ export function PlayerStatsPage() {
                         {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {r.teamAssignments ? "Team round" : `Rating ${roundRating(strokes, course)}`}
+                        {droppedAt !== undefined
+                          ? `Left after hole ${droppedAt}`
+                          : r.teamAssignments
+                            ? "Team round"
+                            : `Rating ${roundRating(strokes, course)}`}
                       </p>
                     </div>
                   </Link>
