@@ -220,21 +220,19 @@ export function RoundDetailPage() {
                     <span className="font-medium text-slate-800">{row.player.name}</span>
                   </span>
                   <span className="tabular-nums text-slate-500">
-                    {`${row.gross} : (${
+                    {`${row.gross} · (${
                       row.grossRelToPar === 0
                         ? "E"
                         : row.grossRelToPar > 0
                           ? `+${row.grossRelToPar}`
                           : row.grossRelToPar
-                    }) : `}
+                    }) · `}
                     <span className="font-semibold text-slate-900">
-                      {`(${
-                        row.netRelToPar === 0
-                          ? "E"
-                          : row.netRelToPar > 0
-                            ? `+${row.netRelToPar}`
-                            : row.netRelToPar
-                      })`}
+                      {row.netRelToPar === 0
+                        ? "E"
+                        : row.netRelToPar > 0
+                          ? `+${row.netRelToPar}`
+                          : row.netRelToPar}
                     </span>
                   </span>
                 </div>
