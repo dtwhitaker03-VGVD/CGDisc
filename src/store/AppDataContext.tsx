@@ -51,7 +51,8 @@ interface RoundRow {
   handicapped: boolean;
   handicap_allowances: Record<string, number> | null;
   team_assignments: Record<string, number> | null;
-  team_game_type: "scramble" | "bestBall" | null;
+  team_game_type: "scramble" | "bestBall" | "teamTotal" | null;
+  scoring_method: "strokes" | "holes" | null;
 }
 
 interface RoundScoreRow {
@@ -105,6 +106,7 @@ function mapRounds(roundRows: RoundRow[], scoreRows: RoundScoreRow[]): Round[] {
       handicapAllowances: r.handicap_allowances ?? undefined,
       teamAssignments: r.team_assignments ?? undefined,
       teamGameType: r.team_game_type ?? undefined,
+      scoringMethod: r.scoring_method ?? undefined,
     };
   });
 }
@@ -255,6 +257,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           handicap_allowances: input.handicapAllowances ?? null,
           team_assignments: input.teamAssignments ?? null,
           team_game_type: input.teamGameType ?? null,
+          scoring_method: input.scoringMethod ?? null,
         })
         .select()
         .single();
@@ -281,6 +284,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         handicapAllowances: input.handicapAllowances,
         teamAssignments: input.teamAssignments,
         teamGameType: input.teamGameType,
+        scoringMethod: input.scoringMethod,
       };
     };
 
@@ -298,6 +302,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       if (patch.teamGameType !== undefined) {
         dbPatch.team_game_type = patch.teamGameType ?? null;
+      }
+      if (patch.scoringMethod !== undefined) {
+        dbPatch.scoring_method = patch.scoringMethod ?? null;
       }
       if (Object.keys(dbPatch).length > 0) {
         const { error } = await supabase.from("rounds").update(dbPatch).eq("id", id);

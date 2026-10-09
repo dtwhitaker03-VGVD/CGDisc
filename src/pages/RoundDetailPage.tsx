@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { coursePar, roundRating, scoreToPar, totalScore } from "../lib/ratings";
+import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { Button, Card, PageHeader } from "../components/ui";
 
 export function RoundDetailPage() {
@@ -36,6 +37,7 @@ export function RoundDetailPage() {
     !round.teamAssignments ||
     round.teamGameType === "bestBall" ||
     round.teamGameType === "teamTotal";
+  const isHolesScoring = round.scoringMethod === "holes";
 
   const teamGroups = round.teamAssignments
     ? Object.entries(
@@ -67,6 +69,43 @@ export function RoundDetailPage() {
     // both show the sum of individual totals.
     return pids.reduce((sum, pid) => sum + totalScore(draftScores[pid] ?? []), 0);
   }
+
+  // Match play: whoever (or whichever team) has the lowest score on a hole
+  // won it; a tie halved it. Only set for straight individual rounds and
+  // team rounds (see scoringMethod).
+  const playerHoleWinRows =
+    isHolesScoring && !round.teamAssignments
+      ? (() => {
+          const wins = computeHoleWins(
+            course.holes.length,
+            round.playerIds.map((pid) => ({ id: pid, perHoleScores: draftScores[pid] ?? [] })),
+          );
+          return round.playerIds
+            .map((pid) => {
+              const player = playersById.get(pid);
+              if (!player) return null;
+              return { pid, player, ...wins[pid] };
+            })
+            .filter((row): row is NonNullable<typeof row> => Boolean(row))
+            .sort((a, b) => b.holesWon - a.holesWon);
+        })()
+      : [];
+
+  const teamHoleWinsMap =
+    isHolesScoring && round.teamAssignments
+      ? computeHoleWins(
+          course.holes.length,
+          teamGroups.map((t) => ({
+            id: `team-${t.teamIndex}`,
+            perHoleScores: teamPerHoleScores(
+              round.teamGameType ?? "bestBall",
+              t.pids,
+              draftScores,
+              course.holes.length,
+            ),
+          })),
+        )
+      : {};
 
   // Team rounds list players grouped by team (all of team 1, then all of
   // team 2, ...) rather than original selection order -- teamGroups is
@@ -128,6 +167,11 @@ export function RoundDetailPage() {
               {round.teamGameType === "scramble" && " · Scramble"}
               {round.teamGameType === "bestBall" && " · Best ball"}
               {round.teamGameType === "teamTotal" && " · Team total"}
+              {isHolesScoring && " · Holes"}
+            </span>
+          ) : isHolesScoring ? (
+            <span className="text-xs font-semibold text-purple-700 bg-purple-100 rounded-full px-2.5 py-1">
+              Holes
             </span>
           ) : undefined
         }
@@ -170,39 +214,91 @@ export function RoundDetailPage() {
         </Card>
       )}
 
+      {!round.teamAssignments && isHolesScoring && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+            Holes won
+          </p>
+          <div className="space-y-1.5">
+            {playerHoleWinRows.map((row, i) => (
+              <div key={row.pid} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <span className="text-slate-400 w-4">{i + 1}</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: row.player.color }}
+                  />
+                  <span className="font-medium text-slate-800">{row.player.name}</span>
+                </span>
+                <span className="font-semibold text-slate-900 tabular-nums">
+                  {row.holesWon} won
+                  {row.holesHalved > 0 ? ` · ${row.holesHalved} halved` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {round.teamAssignments && (
         <Card className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
             Team results
           </p>
           <div className="space-y-2">
-            {teamGroups
-              .map((team) => ({ ...team, total: teamTotal(team.pids) }))
-              .sort((a, b) => a.total - b.total)
-              .map((team, i) => {
-                // Team total sums every teammate's own score, so the fair
-                // par baseline for the team is par times the number of
-                // teammates (two players each at par nets "par x2", E).
-                const parBaseline =
-                  coursePar(course) * (round.teamGameType === "teamTotal" ? team.members.length : 1);
-                const rel = team.total - parBaseline;
-                return (
-                  <div key={team.teamIndex} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className="text-slate-400 w-4">{i + 1}</span>
-                      <span className="font-medium text-slate-800">
-                        Team {team.teamIndex + 1}{" "}
-                        <span className="text-xs text-slate-400 font-normal">
-                          ({team.members.map((m) => m.name).join(", ")})
+            {isHolesScoring
+              ? teamGroups
+                  .map((team) => ({
+                    ...team,
+                    ...teamHoleWinsMap[`team-${team.teamIndex}`],
+                  }))
+                  .sort((a, b) => b.holesWon - a.holesWon)
+                  .map((team, i) => (
+                    <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-slate-400 w-4">{i + 1}</span>
+                        <span className="font-medium text-slate-800">
+                          Team {team.teamIndex + 1}{" "}
+                          <span className="text-xs text-slate-400 font-normal">
+                            ({team.members.map((m) => m.name).join(", ")})
+                          </span>
                         </span>
                       </span>
-                    </span>
-                    <span className="font-semibold text-slate-900 tabular-nums">
-                      {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
-                    </span>
-                  </div>
-                );
-              })}
+                      <span className="font-semibold text-slate-900 tabular-nums">
+                        {team.holesWon} won
+                        {team.holesHalved > 0 ? ` · ${team.holesHalved} halved` : ""}
+                      </span>
+                    </div>
+                  ))
+              : teamGroups
+                  .map((team) => ({ ...team, total: teamTotal(team.pids) }))
+                  .sort((a, b) => a.total - b.total)
+                  .map((team, i) => {
+                    // Team total sums every teammate's own score, so the
+                    // fair par baseline for the team is par times the
+                    // number of teammates (two players each at par nets
+                    // "par x2", E).
+                    const parBaseline =
+                      coursePar(course) *
+                      (round.teamGameType === "teamTotal" ? team.members.length : 1);
+                    const rel = team.total - parBaseline;
+                    return (
+                      <div key={team.teamIndex} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="text-slate-400 w-4">{i + 1}</span>
+                          <span className="font-medium text-slate-800">
+                            Team {team.teamIndex + 1}{" "}
+                            <span className="text-xs text-slate-400 font-normal">
+                              ({team.members.map((m) => m.name).join(", ")})
+                            </span>
+                          </span>
+                        </span>
+                        <span className="font-semibold text-slate-900 tabular-nums">
+                          {team.total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                        </span>
+                      </div>
+                    );
+                  })}
           </div>
         </Card>
       )}

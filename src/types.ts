@@ -64,4 +64,16 @@ export interface Round {
    * (excluded) to preserve their original behavior.
    */
   teamGameType?: "scramble" | "bestBall" | "teamTotal";
+  /**
+   * How the round's overall result is determined. Only meaningful for
+   * straight (non-handicapped) individual rounds and team rounds --
+   * handicapped rounds always score by strokes.
+   * - "strokes" (default when unset): lowest total strokes wins, as always.
+   * - "holes": match-play style -- whoever (or whichever team, scored per
+   *   teamGameType) has the lowest score on a hole wins it; a tie between
+   *   the lowest scorers halves the hole (nobody wins it). The result is
+   *   each player's/team's hole-win count. Individual strokes are still
+   *   recorded and still count toward handicap/rating as normal.
+   */
+  scoringMethod?: "strokes" | "holes";
 }
