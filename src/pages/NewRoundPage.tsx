@@ -692,6 +692,14 @@ export function NewRoundPage() {
     : [...playerIds].sort((a, b) => playerScore(a) - playerScore(b));
   const teamsByIndex = [...teamStandings].sort((a, b) => a.teamIndex - b.teamIndex);
 
+  // Keep the active hole scrolled into view in the (horizontally scrolling,
+  // not all holes fit at once) hole-picker strip, so advancing past the
+  // initially visible holes doesn't require a manual scroll to see where
+  // you are.
+  function scrollActiveHoleIntoView(el: HTMLButtonElement | null) {
+    el?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }
+
   return (
     <div>
       <PageHeader title="New round" subtitle={`Step 3 of 3 · ${course.name}`} />
@@ -701,6 +709,7 @@ export function NewRoundPage() {
           <button
             key={h.number}
             type="button"
+            ref={i === activeHoleIndex ? scrollActiveHoleIntoView : undefined}
             onClick={() => goToHole(i)}
             className={`shrink-0 w-9 h-9 rounded-full text-sm font-semibold ${
               i === activeHoleIndex ? "bg-green-700 text-white" : "bg-slate-100 text-slate-700"
