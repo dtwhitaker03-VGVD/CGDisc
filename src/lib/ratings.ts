@@ -96,7 +96,10 @@ export function playerDifferentials(
 ): Differential[] {
   const out: Differential[] = [];
   for (const round of rounds) {
-    if (round.teamAssignments) continue; // team rounds don't count toward handicap/rating
+    // Scramble (and legacy team rounds with no recorded game type) share one
+    // score across the team, so they're excluded. Best-ball rounds keep each
+    // player's own individual score, so they count like a normal round.
+    if (round.teamAssignments && round.teamGameType !== "bestBall") continue;
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!strokes || !course || strokes.length === 0) continue;

@@ -47,7 +47,18 @@ export interface Round {
   handicapAllowances?: Record<string, number>;
   /**
    * playerId -> team index (0-based), when this was played as a team round.
-   * Team rounds don't count toward anyone's handicap or rating history.
    */
   teamAssignments?: Record<string, number>;
+  /**
+   * How a team round is scored, when teamAssignments is set:
+   * - "scramble": the whole team shares one ball/score per hole. Doesn't
+   *   count toward anyone's handicap or rating.
+   * - "bestBall": each player plays (and is scored) individually; their
+   *   score counts toward handicap/rating as normal. The team's score is
+   *   the lowest among teammates on each hole.
+   * Older rounds saved before this existed have teamAssignments but no
+   * teamGameType, and are treated like "scramble" for rating purposes
+   * (excluded) to preserve their original behavior.
+   */
+  teamGameType?: "scramble" | "bestBall";
 }

@@ -52,15 +52,28 @@ create table if not exists public.rounds (
   -- shift retroactively as handicaps change later.
   handicapped boolean not null default false,
   handicap_allowances jsonb, -- { "<playerId>": <bonus strokes>, ... }
-  -- Team rounds: playerId -> team index (0-based). Team rounds are excluded
-  -- from handicap/rating calculations entirely (see playerDifferentials).
-  team_assignments jsonb
+  -- Team rounds: playerId -> team index (0-based).
+  team_assignments jsonb,
+  -- How a team round is scored: 'scramble' (one shared score per team,
+  -- excluded from handicap/rating) or 'bestBall' (individual scores kept
+  -- and counted toward handicap/rating; team score is the per-hole low).
+  -- Null on rounds saved before this existed, and treated like 'scramble'
+  -- for rating purposes -- see playerDifferentials.
+  team_game_type text check (team_game_type in ('scramble', 'bestBall'))
 );
 
 alter table public.rounds
   add column if not exists handicapped boolean not null default false,
   add column if not exists handicap_allowances jsonb,
-  add column if not exists team_assignments jsonb;
+  add column if not exists team_assignments jsonb,
+  add column if not exists team_game_type text;
+
+alter table public.rounds
+  drop constraint if exists rounds_team_game_type_check;
+
+alter table public.rounds
+  add constraint rounds_team_game_type_check
+  check (team_game_type in ('scramble', 'bestBall'));
 
 -- One row per player per round; strokes is the per-hole score array, same
 -- order as the course's holes at the time the round was played.
