@@ -15,6 +15,7 @@ import {
   playerHoleCounts,
   playerHoleCountsByCourse,
   playerTotalsByCourse,
+  playerWorstHolesByCourse,
   type CourseRelStat,
   type HoleCounts,
   type HoleRelStat,
@@ -70,6 +71,7 @@ export function PlayerStatsPage() {
   })[0];
   const bestCourse = bestCourseStat ? coursesById.get(bestCourseStat.courseId) : undefined;
   const bestHolesByCourse = playerBestHolesByCourse(player.id, rounds, coursesById);
+  const worstHolesByCourse = playerWorstHolesByCourse(player.id, rounds, coursesById);
 
   const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
@@ -80,7 +82,13 @@ export function PlayerStatsPage() {
       const stats = computeScoreStats(totals);
       const counts = holeCountsByCourse.get(courseId);
       if (!course || !stats || !counts) return null;
-      return { course, stats, counts, bestHole: bestHolesByCourse.get(courseId) };
+      return {
+        course,
+        stats,
+        counts,
+        bestHole: bestHolesByCourse.get(courseId),
+        worstHole: worstHolesByCourse.get(courseId),
+      };
     })
     .filter(
       (
@@ -90,6 +98,7 @@ export function PlayerStatsPage() {
         stats: ScoreStats;
         counts: HoleCounts;
         bestHole: HoleRelStat | undefined;
+        worstHole: HoleRelStat | undefined;
       } => Boolean(row),
     )
     .sort((a, b) => a.course.name.localeCompare(b.course.name));
@@ -197,7 +206,7 @@ export function PlayerStatsPage() {
           <p className="text-sm text-slate-500">No rounds logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {courseStatRows.map(({ course, stats, counts, bestHole }) => {
+            {courseStatRows.map(({ course, stats, counts, bestHole, worstHole }) => {
               const par = coursePar(course);
               return (
                 <li key={course.id}>
@@ -233,12 +242,26 @@ export function PlayerStatsPage() {
                       <p className="text-[11px] text-slate-400 mt-1">
                         Best hole: #{bestHole.holeNumber} (par {bestHole.par}
                         {bestHole.distanceFt ? ` · ${bestHole.distanceFt}ft` : ""}) ·{" "}
-                        <span className="font-medium text-slate-600">
+                        <span className="font-medium text-green-600">
                           {bestHole.avgRelToPar === 0
                             ? "E"
                             : bestHole.avgRelToPar > 0
                               ? `+${bestHole.avgRelToPar}`
                               : bestHole.avgRelToPar}
+                        </span>{" "}
+                        avg
+                      </p>
+                    )}
+                    {worstHole && (
+                      <p className="text-[11px] text-slate-400">
+                        Worst hole: #{worstHole.holeNumber} (par {worstHole.par}
+                        {worstHole.distanceFt ? ` · ${worstHole.distanceFt}ft` : ""}) ·{" "}
+                        <span className="font-medium text-red-600">
+                          {worstHole.avgRelToPar === 0
+                            ? "E"
+                            : worstHole.avgRelToPar > 0
+                              ? `+${worstHole.avgRelToPar}`
+                              : worstHole.avgRelToPar}
                         </span>{" "}
                         avg
                       </p>
