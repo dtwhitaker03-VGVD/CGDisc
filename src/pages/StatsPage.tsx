@@ -56,7 +56,7 @@ export function StatsPage() {
                 [...courseTotalsByPlayer(course.id, rounds).values()].flat(),
               );
               return (
-                <Link key={course.id} to={`/stats/course/${course.id}`} className="block">
+                <Link key={course.id} to={`/courses/${course.id}`} className="block">
                   <Card className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-slate-800">{course.name}</p>

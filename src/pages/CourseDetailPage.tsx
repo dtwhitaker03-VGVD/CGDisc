@@ -1,8 +1,14 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { coursePar } from "../lib/ratings";
-import { computeScoreStats, courseTopScores, courseTotalsByPlayer } from "../lib/stats";
-import { Card, PageHeader } from "../components/ui";
+import {
+  computeScoreStats,
+  courseHoleAverages,
+  courseTopScores,
+  courseTotalsByPlayer,
+  rankCourseHoleHandicaps,
+} from "../lib/stats";
+import { Button, Card, PageHeader } from "../components/ui";
 import type { Player } from "../types";
 
 function relToPar(total: number, par: number): string {
@@ -10,9 +16,10 @@ function relToPar(total: number, par: number): string {
   return rel === 0 ? "E" : rel > 0 ? `+${rel}` : `${rel}`;
 }
 
-export function CourseStatsPage() {
+export function CourseDetailPage() {
   const { id } = useParams();
-  const { courses, players, playersById, rounds } = useAppData();
+  const navigate = useNavigate();
+  const { courses, players, playersById, rounds, deleteCourse } = useAppData();
   const course = courses.find((c) => c.id === id);
 
   if (!course) {
@@ -24,6 +31,10 @@ export function CourseStatsPage() {
   }
 
   const par = coursePar(course);
+  const hasAnyDistance = course.holes.some((h) => h.distanceFt);
+  const totalDistance = course.holes.reduce((s, h) => s + (h.distanceFt ?? 0), 0);
+  const holeHandicaps = rankCourseHoleHandicaps(courseHoleAverages(course, rounds));
+
   const totalsByPlayer = courseTotalsByPlayer(course.id, rounds);
   const overall = computeScoreStats([...totalsByPlayer.values()].flat());
 
@@ -47,9 +58,55 @@ export function CourseStatsPage() {
     .filter((row): row is { player: Player; stats: NonNullable<typeof overall> } => Boolean(row))
     .sort((a, b) => a.stats.average - b.stats.average);
 
+  async function handleDelete() {
+    if (!course) return;
+    if (confirm(`Delete "${course.name}"? This also deletes any rounds played there.`)) {
+      await deleteCourse(course.id);
+      navigate("/courses");
+    }
+  }
+
   return (
     <div>
-      <PageHeader title={course.name} subtitle={`${course.holes.length} holes · par ${par}`} />
+      <PageHeader title={course.name} subtitle={course.location} />
+
+      <Card className="mb-4 overflow-x-auto">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
+          Holes
+        </p>
+        <p className="text-xs text-slate-400 mb-2">
+          {course.holes.length} holes · par {par}
+          {hasAnyDistance ? ` · ${totalDistance.toLocaleString()} ft` : ""}
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 text-xs">
+              <th className="text-left font-medium pb-2">Hole</th>
+              <th className="font-medium pb-2 text-center">Yardage</th>
+              <th className="font-medium pb-2 text-center">Avg</th>
+              <th className="font-medium pb-2 text-center">Handicap</th>
+            </tr>
+          </thead>
+          <tbody>
+            {holeHandicaps.map((h) => (
+              <tr key={h.holeNumber} className="border-t border-slate-100">
+                <td className="py-1.5 whitespace-nowrap">
+                  #{h.holeNumber} <span className="text-slate-400">(par {h.par})</span>
+                </td>
+                <td className="py-1.5 text-center tabular-nums text-slate-600">
+                  {h.distanceFt ? `${h.distanceFt}ft` : "—"}
+                </td>
+                <td className="py-1.5 text-center tabular-nums text-slate-900 font-semibold">
+                  {h.average ?? "—"}
+                </td>
+                <td className="py-1.5 text-center tabular-nums font-semibold">
+                  {h.handicapRank ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
 
       <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -131,7 +188,7 @@ export function CourseStatsPage() {
         )}
       </Card>
 
-      <Card>
+      <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
           By player (low / avg / high)
         </p>
@@ -168,6 +225,10 @@ export function CourseStatsPage() {
           </ul>
         )}
       </Card>
+
+      <Button variant="danger" className="w-full" onClick={handleDelete}>
+        Delete course
+      </Button>
     </div>
   );
 }
