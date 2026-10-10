@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import {
+  allocateHandicapStrokes,
   computeHandicap,
   computeHandicapAllowances,
   playerDifferentials,
   totalScore,
 } from "../lib/ratings";
+import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { Button, Card, EmptyState, LinkButton, PageHeader, inputClass } from "../components/ui";
@@ -840,6 +842,30 @@ export function NewRoundPage() {
     ? buildTeamStandings(finalTotal, course.holes.length)
     : [];
 
+  // "Dynamic" net, like a real scorecard's stroke-index column: each
+  // player's flat allowance (the same "Simple" number used above) gets
+  // spread across specific holes instead, hardest holes first. The round
+  // total always comes out equal to the Simple net -- this only changes
+  // which holes the strokes land on.
+  const dynamicHoleOrder = isHandicapped ? courseHoleHandicapOrder(course, rounds) : [];
+  function buildDynamicNetRows(ids: string[]) {
+    return ids
+      .map((pid) => {
+        const player = players.find((p) => p.id === pid);
+        const playerScores = scores[pid];
+        if (!player || !playerScores) return null;
+        const strokesPerHole = allocateHandicapStrokes(allowances[pid] ?? 0, dynamicHoleOrder);
+        const netPerHole = course!.holes.map(
+          (hole, i) => (playerScores[i] ?? hole.par) - (strokesPerHole[i] ?? 0),
+        );
+        const total = netPerHole.reduce((sum, v) => sum + v, 0);
+        return { pid, player, strokesPerHole, netPerHole, total };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((a, b) => a.total - b.total);
+  }
+  const finalDynamicNetRows = isHandicapped ? buildDynamicNetRows(playerIds) : [];
+
   // Match play: whoever (or whichever team) has the lowest score on a hole
   // wins it -- only offered for straight individual rounds and team
   // rounds. Player totals are computed the same way regardless (0 until a
@@ -983,7 +1009,7 @@ export function NewRoundPage() {
         {isHandicapped && (
           <Card className="mb-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-              Net leaderboard
+              Net leaderboard (Simple)
             </p>
             <div className="space-y-1.5">
               {finalNetStandings.map((row, i) => (
@@ -1020,6 +1046,59 @@ export function NewRoundPage() {
                 </div>
               ))}
             </div>
+          </Card>
+        )}
+
+        {isHandicapped && (
+          <Card className="mb-3 overflow-x-auto">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
+              Net leaderboard (Dynamic)
+            </p>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Each player's allowance applied per hole, hardest holes first (•) -- same total as
+              Simple.
+            </p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 text-xs">
+                  <th className="text-left font-medium pb-2 sticky left-0 bg-white pr-2">Hole</th>
+                  {finalDynamicNetRows.map((row) => (
+                    <th key={row.pid} className="font-medium pb-2 px-1 min-w-[56px]">
+                      {row.player.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {course.holes.map((hole, i) => (
+                  <tr key={hole.number} className="border-t border-slate-100">
+                    <td className="py-1.5 sticky left-0 bg-white pr-2 whitespace-nowrap">
+                      {hole.number} <span className="text-slate-400">(par {hole.par})</span>
+                    </td>
+                    {finalDynamicNetRows.map((row) => (
+                      <td key={row.pid} className="px-1 py-1.5 text-center tabular-nums">
+                        {row.netPerHole[i]}
+                        {row.strokesPerHole[i] > 0 && (
+                          <span className="text-green-600">
+                            {"•".repeat(row.strokesPerHole[i])}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 font-semibold">
+                  <td className="py-1.5 sticky left-0 bg-white pr-2">Total</td>
+                  {finalDynamicNetRows.map((row) => (
+                    <td key={row.pid} className="px-1 py-1.5 text-center tabular-nums">
+                      {row.total}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
           </Card>
         )}
 
