@@ -10,9 +10,12 @@ import {
 } from "../lib/ratings";
 import {
   computeScoreStats,
+  playerBestHole,
+  playerCourseRelToPar,
   playerHoleCounts,
   playerHoleCountsByCourse,
   playerTotalsByCourse,
+  type CourseRelStat,
   type HoleCounts,
   type ScoreStats,
 } from "../lib/stats";
@@ -52,6 +55,22 @@ export function PlayerStatsPage() {
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
 
+  // Best course: lowest average relative to par, ties broken by whoever has
+  // more rounds played there (more confidence), then alphabetically. Best
+  // hole: same metric per hole instead of per course, ties broken by the
+  // longer hole (handled inside playerBestHole itself).
+  const courseRelStats = playerCourseRelToPar(player.id, rounds, coursesById);
+  const bestCourseStat: CourseRelStat | undefined = [...courseRelStats].sort((a, b) => {
+    if (a.avgRelToPar !== b.avgRelToPar) return a.avgRelToPar - b.avgRelToPar;
+    if (a.roundsPlayed !== b.roundsPlayed) return b.roundsPlayed - a.roundsPlayed;
+    const nameA = coursesById.get(a.courseId)?.name ?? "";
+    const nameB = coursesById.get(b.courseId)?.name ?? "";
+    return nameA.localeCompare(nameB);
+  })[0];
+  const bestCourse = bestCourseStat ? coursesById.get(bestCourseStat.courseId) : undefined;
+  const bestHole = playerBestHole(player.id, rounds, coursesById);
+  const bestHoleCourse = bestHole ? coursesById.get(bestHole.courseId) : undefined;
+
   const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
   const holeCountsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
@@ -87,6 +106,58 @@ export function PlayerStatsPage() {
           <p className="text-2xl font-bold tabular-nums">{playerRounds.length}</p>
         </Card>
       </div>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+          Personal bests
+        </p>
+        <div className="grid grid-cols-2 gap-3 text-center">
+          <div>
+            <p className="text-[11px] text-slate-400">Best course</p>
+            {bestCourse && bestCourseStat ? (
+              <>
+                <p className="font-semibold text-slate-900 text-sm mt-0.5">{bestCourse.name}</p>
+                <p className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
+                  {bestCourseStat.avgRelToPar === 0
+                    ? "E"
+                    : bestCourseStat.avgRelToPar > 0
+                      ? `+${bestCourseStat.avgRelToPar}`
+                      : bestCourseStat.avgRelToPar}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {bestCourseStat.roundsPlayed} round{bestCourseStat.roundsPlayed === 1 ? "" : "s"}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-400 mt-2">—</p>
+            )}
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-400">Best hole</p>
+            {bestHole && bestHoleCourse ? (
+              <>
+                <p className="font-semibold text-slate-900 text-sm mt-0.5">
+                  {bestHoleCourse.name} #{bestHole.holeNumber}
+                </p>
+                <p className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
+                  {bestHole.avgRelToPar === 0
+                    ? "E"
+                    : bestHole.avgRelToPar > 0
+                      ? `+${bestHole.avgRelToPar}`
+                      : bestHole.avgRelToPar}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Par {bestHole.par}
+                  {bestHole.distanceFt ? ` · ${bestHole.distanceFt}ft` : ""} ·{" "}
+                  {bestHole.roundsPlayed} round{bestHole.roundsPlayed === 1 ? "" : "s"}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-400 mt-2">—</p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">

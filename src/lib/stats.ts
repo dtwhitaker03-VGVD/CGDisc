@@ -1,5 +1,5 @@
 import type { Course, Round } from "../types";
-import { totalScore } from "./ratings";
+import { scoreToPar, totalScore } from "./ratings";
 
 export interface ScoreStats {
   rounds: number;
@@ -8,10 +8,20 @@ export interface ScoreStats {
   average: number;
 }
 
-function validRoundTotal(strokes: number[] | undefined): number | null {
+export function validRoundTotal(strokes: number[] | undefined): number | null {
   if (!strokes || strokes.length === 0) return null;
   if (strokes.some((s) => !Number.isFinite(s) || s <= 0)) return null;
   return totalScore(strokes);
+}
+
+/** A round whose individual player scores are a personal result worth
+ * attributing to them -- true for straight/handicapped rounds and for
+ * bestBall/teamTotal team rounds, false for scramble (and legacy team
+ * rounds with no recorded game type), where the whole team shares one
+ * score. Mirrors playerDifferentials' handicap/rating exclusion. */
+function isIndividuallyScored(round: Round): boolean {
+  if (!round.teamAssignments) return true;
+  return round.teamGameType === "bestBall" || round.teamGameType === "teamTotal";
 }
 
 export function computeScoreStats(totals: number[]): ScoreStats | null {
@@ -138,4 +148,134 @@ export function playerHoleCountsByCourse(
     byCourse.set(round.courseId, counts);
   }
   return byCourse;
+}
+
+export interface CourseScoreEntry {
+  playerId: string;
+  roundId: string;
+  date: string;
+  total: number;
+}
+
+/**
+ * The best (lowest) individual round totals ever recorded at a course,
+ * across every player, best first. Excludes scramble rounds (the whole
+ * team shares one score, not a personal result) and rounds a player left
+ * early (a partial round isn't a fair comparison against a full one).
+ */
+export function courseTopScores(
+  courseId: string,
+  rounds: Round[],
+  limit = 5,
+): CourseScoreEntry[] {
+  const entries: CourseScoreEntry[] = [];
+  for (const round of rounds) {
+    if (round.courseId !== courseId || !isIndividuallyScored(round)) continue;
+    for (const playerId of round.playerIds) {
+      if (round.droppedPlayers?.[playerId] !== undefined) continue;
+      const total = validRoundTotal(round.scores[playerId]);
+      if (total === null) continue;
+      entries.push({ playerId, roundId: round.id, date: round.date, total });
+    }
+  }
+  return entries.sort((a, b) => a.total - b.total).slice(0, limit);
+}
+
+export interface CourseRelStat {
+  courseId: string;
+  avgRelToPar: number;
+  roundsPlayed: number;
+}
+
+/**
+ * A player's average score relative to par at each course they've played,
+ * best (most negative) first. Excludes scramble rounds, same reasoning as
+ * courseTopScores. Unlike raw totals, relative-to-par is comparable even
+ * for a round a player left early (scoreToPar is given the holes they
+ * actually played), so those still count here.
+ */
+export function playerCourseRelToPar(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): CourseRelStat[] {
+  const byCourse = new Map<string, { sum: number; count: number }>();
+  for (const round of rounds) {
+    if (!isIndividuallyScored(round)) continue;
+    const strokes = round.scores[playerId];
+    const course = coursesById.get(round.courseId);
+    if (!course || validRoundTotal(strokes) === null) continue;
+    const rel = scoreToPar(strokes!, course, round.droppedPlayers?.[playerId]);
+    const entry = byCourse.get(round.courseId) ?? { sum: 0, count: 0 };
+    entry.sum += rel;
+    entry.count += 1;
+    byCourse.set(round.courseId, entry);
+  }
+  return [...byCourse.entries()]
+    .map(([courseId, { sum, count }]) => ({
+      courseId,
+      avgRelToPar: Math.round((sum / count) * 10) / 10,
+      roundsPlayed: count,
+    }))
+    .sort((a, b) => a.avgRelToPar - b.avgRelToPar);
+}
+
+export interface HoleRelStat {
+  courseId: string;
+  holeNumber: number;
+  par: number;
+  distanceFt?: number;
+  avgRelToPar: number;
+  roundsPlayed: number;
+}
+
+/**
+ * The hole (course + hole number) a player has scored best on average,
+ * relative to par, across every round they've played it -- including
+ * scramble (same precedent as the ace/birdie/etc. counts: a hole is a
+ * hole) and rounds left early (every hole actually played is real). Ties
+ * are broken by the longer hole, since that's the more impressive result.
+ */
+export function playerBestHole(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): HoleRelStat | null {
+  const byHole = new Map<string, { courseId: string; holeIndex: number; sum: number; count: number }>();
+  for (const round of rounds) {
+    const strokes = round.scores[playerId];
+    const course = coursesById.get(round.courseId);
+    if (!course || !strokes) continue;
+    strokes.forEach((s, i) => {
+      if (!Number.isFinite(s) || s <= 0) return;
+      const hole = course.holes[i];
+      if (!hole) return;
+      const key = `${round.courseId}#${i}`;
+      const entry = byHole.get(key) ?? { courseId: round.courseId, holeIndex: i, sum: 0, count: 0 };
+      entry.sum += s - hole.par;
+      entry.count += 1;
+      byHole.set(key, entry);
+    });
+  }
+  let best: HoleRelStat | null = null;
+  for (const { courseId, holeIndex, sum, count } of byHole.values()) {
+    const course = coursesById.get(courseId);
+    const hole = course?.holes[holeIndex];
+    if (!course || !hole) continue;
+    const candidate: HoleRelStat = {
+      courseId,
+      holeNumber: hole.number,
+      par: hole.par,
+      distanceFt: hole.distanceFt,
+      avgRelToPar: Math.round((sum / count) * 10) / 10,
+      roundsPlayed: count,
+    };
+    const better =
+      !best ||
+      candidate.avgRelToPar < best.avgRelToPar ||
+      (candidate.avgRelToPar === best.avgRelToPar &&
+        (candidate.distanceFt ?? -1) > (best.distanceFt ?? -1));
+    if (better) best = candidate;
+  }
+  return best;
 }
