@@ -103,6 +103,30 @@ export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverage
   }));
 }
 
+/**
+ * Every hole at a course, ordered hardest-to-easiest (index 0 = stroke
+ * index 1) -- this is the order handicap strokes get allocated to, like
+ * the stroke-index column on a real scorecard. Holes with a scoring
+ * average rank by that average; a hole nobody's played yet falls back to
+ * par (descending), then distance (descending), so a freshly added
+ * course still has a complete, usable order from the start.
+ */
+export function courseHoleHandicapOrder(course: Course, rounds: Round[]): number[] {
+  return courseHoleAverages(course, rounds)
+    .map((h, i) => ({ i, average: h.average, par: h.par, distanceFt: h.distanceFt }))
+    .sort((a, b) => {
+      if (a.average !== null && b.average !== null && a.average !== b.average) {
+        return b.average - a.average;
+      }
+      if ((a.average !== null) !== (b.average !== null)) {
+        return a.average !== null ? -1 : 1;
+      }
+      if (a.par !== b.par) return b.par - a.par;
+      return (b.distanceFt ?? -1) - (a.distanceFt ?? -1);
+    })
+    .map((h) => h.i);
+}
+
 export interface HoleHandicap extends HoleAverageStat {
   /** 1 = hardest (highest scoring average), null if not enough data. */
   handicapRank: number | null;

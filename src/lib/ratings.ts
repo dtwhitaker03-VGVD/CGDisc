@@ -77,8 +77,9 @@ export function computeHandicap(differentials: Differential[]): number | null {
  * Converts each player's handicap into bonus strokes for a head-to-head
  * round: the lowest handicap in the group plays scratch (0 strokes), and
  * everyone else gets the gap to that player, rounded to a whole stroke.
- * Strokes are applied evenly to the round total rather than allocated to
- * specific holes (this app doesn't track a per-hole difficulty ranking).
+ * This is the "Simple" net -- applied evenly to the round total. See
+ * allocateHandicapStrokes for the "Dynamic" per-hole breakdown of the
+ * same total, using the course's hole handicap order.
  */
 export function computeHandicapAllowances(
   handicaps: Record<string, number>,
@@ -89,6 +90,25 @@ export function computeHandicapAllowances(
   return Object.fromEntries(
     Object.entries(handicaps).map(([playerId, h]) => [playerId, Math.round(h - lowest)]),
   );
+}
+
+/**
+ * Spreads a player's whole-round handicap allowance across specific holes,
+ * like the stroke-index column on a real scorecard: one stroke each to the
+ * hardest holes first (per holeOrder, hardest-to-easiest), looping back
+ * for a second stroke on the hardest holes again if the allowance is more
+ * than the number of holes. The total strokes given out always equals the
+ * input allowance, so summing a "Dynamic" hole-by-hole net always equals
+ * the flat "Simple" net -- this only changes which holes get the credit,
+ * not the round total.
+ */
+export function allocateHandicapStrokes(allowance: number, holeOrder: number[]): number[] {
+  const strokes = new Array<number>(holeOrder.length).fill(0);
+  if (holeOrder.length === 0) return strokes;
+  for (let i = 0; i < allowance; i++) {
+    strokes[holeOrder[i % holeOrder.length]] += 1;
+  }
+  return strokes;
 }
 
 export function playerDifferentials(
