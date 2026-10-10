@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { coursePar } from "../lib/ratings";
-import { computeScoreStats, courseTotalsByPlayer } from "../lib/stats";
+import { computeScoreStats, courseTopScores, courseTotalsByPlayer } from "../lib/stats";
 import { Card, PageHeader } from "../components/ui";
 import type { Player } from "../types";
 
@@ -12,7 +12,7 @@ function relToPar(total: number, par: number): string {
 
 export function CourseStatsPage() {
   const { id } = useParams();
-  const { courses, players, rounds } = useAppData();
+  const { courses, players, playersById, rounds } = useAppData();
   const course = courses.find((c) => c.id === id);
 
   if (!course) {
@@ -26,6 +26,16 @@ export function CourseStatsPage() {
   const par = coursePar(course);
   const totalsByPlayer = courseTotalsByPlayer(course.id, rounds);
   const overall = computeScoreStats([...totalsByPlayer.values()].flat());
+
+  // The record and top 5 only count individually-scored rounds (not
+  // scramble, where the whole team shares one score) -- see courseTopScores.
+  const topScores = courseTopScores(course.id, rounds, 5);
+  const recordEntry = topScores[0];
+  const recordHolderNames = recordEntry
+    ? [...new Set(topScores.filter((e) => e.total === recordEntry.total).map((e) => e.playerId))]
+        .map((pid) => playersById.get(pid)?.name)
+        .filter((name): name is string => Boolean(name))
+    : [];
 
   const playerRows = [...totalsByPlayer.entries()]
     .map(([playerId, totals]) => {
@@ -50,8 +60,12 @@ export function CourseStatsPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-xs text-slate-400">Low</p>
-                <p className="text-xl font-bold text-green-600 tabular-nums">{overall.low}</p>
-                <p className="text-xs text-slate-400">{relToPar(overall.low, par)}</p>
+                <p className="text-xl font-bold text-green-600 tabular-nums">
+                  {recordEntry?.total ?? overall.low}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {relToPar(recordEntry?.total ?? overall.low, par)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Average</p>
@@ -63,12 +77,57 @@ export function CourseStatsPage() {
                 <p className="text-xs text-slate-400">{relToPar(overall.high, par)}</p>
               </div>
             </div>
-            <p className="text-center text-[11px] text-slate-400 mt-2">
+            {recordHolderNames.length > 0 && (
+              <p className="text-center text-sm text-slate-600 mt-2">
+                Held by <span className="font-semibold">{recordHolderNames.join(" & ")}</span>
+              </p>
+            )}
+            <p className="text-center text-[11px] text-slate-400 mt-1">
               {overall.rounds} rounds logged
             </p>
           </>
         ) : (
           <p className="text-sm text-slate-500">No rounds logged here yet.</p>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Top 5 scores
+        </p>
+        {topScores.length === 0 ? (
+          <p className="text-sm text-slate-500">No individually-scored rounds logged here yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {topScores.map((entry, i) => {
+              const player = playersById.get(entry.playerId);
+              if (!player) return null;
+              return (
+                <li key={`${entry.roundId}-${entry.playerId}`}>
+                  <Link
+                    to={`/round/${entry.roundId}`}
+                    className="flex items-center justify-between py-2.5"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400 w-4">{i + 1}</span>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: player.color }}
+                      />
+                      <span className="font-medium text-slate-800 text-sm">{player.name}</span>
+                    </span>
+                    <span className="text-right">
+                      <span className="font-semibold tabular-nums text-sm">{entry.total}</span>{" "}
+                      <span className="text-xs text-slate-400">
+                        ({relToPar(entry.total, par)})
+                      </span>
+                      <span className="block text-[11px] text-slate-400">{entry.date}</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </Card>
 
