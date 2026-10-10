@@ -6,13 +6,13 @@ import { AuthPage } from "./pages/AuthPage";
 import { HomePage } from "./pages/HomePage";
 import { CoursesPage } from "./pages/CoursesPage";
 import { CourseFormPage } from "./pages/CourseFormPage";
+import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { PlayersPage } from "./pages/PlayersPage";
 import { NewRoundPage } from "./pages/NewRoundPage";
 import { RoundsPage } from "./pages/RoundsPage";
 import { RoundDetailPage } from "./pages/RoundDetailPage";
 import { StatsPage } from "./pages/StatsPage";
 import { PlayerStatsPage } from "./pages/PlayerStatsPage";
-import { CourseStatsPage } from "./pages/CourseStatsPage";
 import { AboutRatingsPage } from "./pages/AboutRatingsPage";
 
 function FullScreenMessage({ children }: { children: React.ReactNode }) {
@@ -35,14 +35,13 @@ function AppRoutes() {
             <Route path="/" element={<HomePage />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/courses/new" element={<CourseFormPage />} />
-            <Route path="/courses/:id" element={<CourseFormPage />} />
+            <Route path="/courses/:id" element={<CourseDetailPage />} />
             <Route path="/players" element={<PlayersPage />} />
             <Route path="/round/new" element={<NewRoundPage />} />
             <Route path="/rounds" element={<RoundsPage />} />
             <Route path="/round/:id" element={<RoundDetailPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/stats/:id" element={<PlayerStatsPage />} />
-            <Route path="/stats/course/:id" element={<CourseStatsPage />} />
             <Route path="/about-ratings" element={<AboutRatingsPage />} />
           </Routes>
         </div>

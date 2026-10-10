@@ -210,7 +210,7 @@ export function PlayerStatsPage() {
               const par = coursePar(course);
               return (
                 <li key={course.id}>
-                  <Link to={`/stats/course/${course.id}`} className="block py-2.5">
+                  <Link to={`/courses/${course.id}`} className="block py-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-slate-800 text-sm">
                         {course.name}{" "}

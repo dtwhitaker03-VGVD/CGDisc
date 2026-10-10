@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Fragment, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { DEFAULT_POINTS_PER_THROW } from "../lib/ratings";
 import { Button, Card, Field, PageHeader, inputClass } from "../components/ui";
@@ -13,25 +13,21 @@ function formatFeet(n: number): string {
   return n.toLocaleString();
 }
 
+// Courses are shared across the whole group and tied to everyone's
+// historical rounds and stats, so once added they're intentionally not
+// editable or deletable from here -- this page only ever creates a new one.
 export function CourseFormPage() {
-  const { id } = useParams();
   const navigate = useNavigate();
-  const { courses, addCourse, updateCourse, deleteCourse } = useAppData();
-  const existing = useMemo(() => courses.find((c) => c.id === id), [courses, id]);
-  const isEdit = Boolean(existing);
+  const { addCourse, updateCourse } = useAppData();
 
-  const [name, setName] = useState(existing?.name ?? "");
-  const [location, setLocation] = useState(existing?.location ?? "");
-  const [holes, setHoles] = useState<Hole[]>(existing?.holes ?? buildHoles(18, []));
-  const [pointsPerThrow, setPointsPerThrow] = useState(
-    existing?.pointsPerThrow ?? DEFAULT_POINTS_PER_THROW,
-  );
-  const [ratingBasis, setRatingBasis] = useState<number>(
-    existing?.ratingBasis ?? holes.reduce((s, h) => s + h.par, 0),
-  );
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [holes, setHoles] = useState<Hole[]>(buildHoles(18, []));
+  const [pointsPerThrow, setPointsPerThrow] = useState(DEFAULT_POINTS_PER_THROW);
+  const [ratingBasis, setRatingBasis] = useState<number>(holes.reduce((s, h) => s + h.par, 0));
   const [ratingBasisTouched, setRatingBasisTouched] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [mapImageUrl, setMapImageUrl] = useState(existing?.mapImageUrl ?? "");
+  const [mapImageUrl, setMapImageUrl] = useState("");
 
   const totalPar = holes.reduce((s, h) => s + h.par, 0);
 
@@ -64,44 +60,25 @@ export function CourseFormPage() {
     if (!name.trim() || holes.length === 0) return;
     setSaving(true);
     try {
-      if (isEdit && existing) {
-        await updateCourse(existing.id, {
-          name: name.trim(),
-          location: location.trim() || undefined,
-          holes,
-          pointsPerThrow,
-          ratingBasis,
-          mapImageUrl: mapImageUrl.trim() || undefined,
-        });
-      } else {
-        const course = await addCourse({
-          name: name.trim(),
-          location: location.trim() || undefined,
-          holes,
-        });
-        await updateCourse(course.id, {
-          pointsPerThrow,
-          ratingBasis,
-          mapImageUrl: mapImageUrl.trim() || undefined,
-        });
-      }
+      const course = await addCourse({
+        name: name.trim(),
+        location: location.trim() || undefined,
+        holes,
+      });
+      await updateCourse(course.id, {
+        pointsPerThrow,
+        ratingBasis,
+        mapImageUrl: mapImageUrl.trim() || undefined,
+      });
       navigate("/courses");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleDelete() {
-    if (!existing) return;
-    if (confirm(`Delete "${existing.name}"? This also deletes any rounds played there.`)) {
-      await deleteCourse(existing.id);
-      navigate("/courses");
-    }
-  }
-
   return (
     <div>
-      <PageHeader title={isEdit ? "Edit course" : "Add a course"} />
+      <PageHeader title="Add a course" />
 
       <div className="space-y-4">
         <Card className="space-y-3">
@@ -250,14 +227,8 @@ export function CourseFormPage() {
         )}
 
         <Button className="w-full" onClick={handleSave} disabled={!name.trim() || saving}>
-          {saving ? "Saving…" : isEdit ? "Save changes" : "Add course"}
+          {saving ? "Saving…" : "Add course"}
         </Button>
-
-        {isEdit && (
-          <Button variant="danger" className="w-full" onClick={handleDelete}>
-            Delete course
-          </Button>
-        )}
       </div>
     </div>
   );

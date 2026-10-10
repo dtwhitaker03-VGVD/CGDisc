@@ -66,6 +66,70 @@ export function playerTotalsByCourse(playerId: string, rounds: Round[]): Map<str
   return byCourse;
 }
 
+export interface HoleAverageStat {
+  holeNumber: number;
+  par: number;
+  distanceFt?: number;
+  /** Average raw strokes across every recorded score on this hole, or
+   * null if nobody's played it yet. */
+  average: number | null;
+  entries: number;
+}
+
+/** Every hole's average raw score at a course, across every player and
+ * round that's ever recorded one (every player's score counts, same as
+ * courseTotalsByPlayer -- a hole is a hole regardless of game type). */
+export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverageStat[] {
+  const sums = new Array<number>(course.holes.length).fill(0);
+  const counts = new Array<number>(course.holes.length).fill(0);
+  for (const round of rounds) {
+    if (round.courseId !== course.id) continue;
+    for (const playerId of round.playerIds) {
+      const strokes = round.scores[playerId];
+      if (!strokes) continue;
+      strokes.forEach((s, i) => {
+        if (!Number.isFinite(s) || s <= 0 || i >= sums.length) return;
+        sums[i] += s;
+        counts[i] += 1;
+      });
+    }
+  }
+  return course.holes.map((hole, i) => ({
+    holeNumber: hole.number,
+    par: hole.par,
+    distanceFt: hole.distanceFt,
+    average: counts[i] > 0 ? Math.round((sums[i] / counts[i]) * 100) / 100 : null,
+    entries: counts[i],
+  }));
+}
+
+export interface HoleHandicap extends HoleAverageStat {
+  /** 1 = hardest (highest scoring average), null if not enough data. */
+  handicapRank: number | null;
+}
+
+/**
+ * Ranks each hole 1..N by scoring average, hardest (highest average)
+ * first, like a scorecard's handicap column. Ties are broken by the
+ * longer hole (more impressive to be tied with on a harder-looking hole).
+ * Holes nobody's played yet get no rank. Returns holes in their original
+ * course order, not sorted.
+ */
+export function rankCourseHoleHandicaps(holeAverages: HoleAverageStat[]): HoleHandicap[] {
+  const ranked = holeAverages
+    .filter((h): h is HoleAverageStat & { average: number } => h.average !== null)
+    .sort((a, b) => {
+      if (b.average !== a.average) return b.average - a.average;
+      return (b.distanceFt ?? -1) - (a.distanceFt ?? -1);
+    });
+  const rankByHoleNumber = new Map<number, number>();
+  ranked.forEach((h, i) => rankByHoleNumber.set(h.holeNumber, i + 1));
+  return holeAverages.map((h) => ({
+    ...h,
+    handicapRank: rankByHoleNumber.get(h.holeNumber) ?? null,
+  }));
+}
+
 export interface HoleCounts {
   holesPlayed: number;
   aces: number;
