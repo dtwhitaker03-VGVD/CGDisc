@@ -10,13 +10,14 @@ import {
 } from "../lib/ratings";
 import {
   computeScoreStats,
-  playerBestHole,
+  playerBestHolesByCourse,
   playerCourseRelToPar,
   playerHoleCounts,
   playerHoleCountsByCourse,
   playerTotalsByCourse,
   type CourseRelStat,
   type HoleCounts,
+  type HoleRelStat,
   type ScoreStats,
 } from "../lib/stats";
 import { RatingChart } from "../components/RatingChart";
@@ -68,8 +69,7 @@ export function PlayerStatsPage() {
     return nameA.localeCompare(nameB);
   })[0];
   const bestCourse = bestCourseStat ? coursesById.get(bestCourseStat.courseId) : undefined;
-  const bestHole = playerBestHole(player.id, rounds, coursesById);
-  const bestHoleCourse = bestHole ? coursesById.get(bestHole.courseId) : undefined;
+  const bestHolesByCourse = playerBestHolesByCourse(player.id, rounds, coursesById);
 
   const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
@@ -80,10 +80,17 @@ export function PlayerStatsPage() {
       const stats = computeScoreStats(totals);
       const counts = holeCountsByCourse.get(courseId);
       if (!course || !stats || !counts) return null;
-      return { course, stats, counts };
+      return { course, stats, counts, bestHole: bestHolesByCourse.get(courseId) };
     })
     .filter(
-      (row): row is { course: Course; stats: ScoreStats; counts: HoleCounts } => Boolean(row),
+      (
+        row,
+      ): row is {
+        course: Course;
+        stats: ScoreStats;
+        counts: HoleCounts;
+        bestHole: HoleRelStat | undefined;
+      } => Boolean(row),
     )
     .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
@@ -108,55 +115,28 @@ export function PlayerStatsPage() {
       </div>
 
       <Card className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Personal bests
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Best course
         </p>
-        <div className="grid grid-cols-2 gap-3 text-center">
-          <div>
-            <p className="text-[11px] text-slate-400">Best course</p>
-            {bestCourse && bestCourseStat ? (
-              <>
-                <p className="font-semibold text-slate-900 text-sm mt-0.5">{bestCourse.name}</p>
-                <p className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
-                  {bestCourseStat.avgRelToPar === 0
-                    ? "E"
-                    : bestCourseStat.avgRelToPar > 0
-                      ? `+${bestCourseStat.avgRelToPar}`
-                      : bestCourseStat.avgRelToPar}
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  {bestCourseStat.roundsPlayed} round{bestCourseStat.roundsPlayed === 1 ? "" : "s"}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-slate-400 mt-2">—</p>
-            )}
+        {bestCourse && bestCourseStat ? (
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-slate-900 text-sm">{bestCourse.name}</p>
+            <p className="text-right">
+              <span className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
+                {bestCourseStat.avgRelToPar === 0
+                  ? "E"
+                  : bestCourseStat.avgRelToPar > 0
+                    ? `+${bestCourseStat.avgRelToPar}`
+                    : bestCourseStat.avgRelToPar}
+              </span>{" "}
+              <span className="text-[11px] text-slate-400">
+                {bestCourseStat.roundsPlayed} round{bestCourseStat.roundsPlayed === 1 ? "" : "s"}
+              </span>
+            </p>
           </div>
-          <div>
-            <p className="text-[11px] text-slate-400">Best hole</p>
-            {bestHole && bestHoleCourse ? (
-              <>
-                <p className="font-semibold text-slate-900 text-sm mt-0.5">
-                  {bestHoleCourse.name} #{bestHole.holeNumber}
-                </p>
-                <p className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
-                  {bestHole.avgRelToPar === 0
-                    ? "E"
-                    : bestHole.avgRelToPar > 0
-                      ? `+${bestHole.avgRelToPar}`
-                      : bestHole.avgRelToPar}
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  Par {bestHole.par}
-                  {bestHole.distanceFt ? ` · ${bestHole.distanceFt}ft` : ""} ·{" "}
-                  {bestHole.roundsPlayed} round{bestHole.roundsPlayed === 1 ? "" : "s"}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-slate-400 mt-2">—</p>
-            )}
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-slate-400">—</p>
+        )}
       </Card>
 
       <Card className="mb-4">
@@ -217,7 +197,7 @@ export function PlayerStatsPage() {
           <p className="text-sm text-slate-500">No rounds logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {courseStatRows.map(({ course, stats, counts }) => {
+            {courseStatRows.map(({ course, stats, counts, bestHole }) => {
               const par = coursePar(course);
               return (
                 <li key={course.id}>
@@ -249,6 +229,20 @@ export function PlayerStatsPage() {
                       <span className="text-red-600">{counts.doubleBogeys} Dbl</span>
                       <span className="text-red-700">{counts.triplePlusBogeys} Tpl+</span>
                     </div>
+                    {bestHole && (
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Best hole: #{bestHole.holeNumber} (par {bestHole.par}
+                        {bestHole.distanceFt ? ` · ${bestHole.distanceFt}ft` : ""}) ·{" "}
+                        <span className="font-medium text-slate-600">
+                          {bestHole.avgRelToPar === 0
+                            ? "E"
+                            : bestHole.avgRelToPar > 0
+                              ? `+${bestHole.avgRelToPar}`
+                              : bestHole.avgRelToPar}
+                        </span>{" "}
+                        avg
+                      </p>
+                    )}
                   </Link>
                 </li>
               );

@@ -230,17 +230,18 @@ export interface HoleRelStat {
 }
 
 /**
- * The hole (course + hole number) a player has scored best on average,
- * relative to par, across every round they've played it -- including
- * scramble (same precedent as the ace/birdie/etc. counts: a hole is a
- * hole) and rounds left early (every hole actually played is real). Ties
- * are broken by the longer hole, since that's the more impressive result.
+ * For each course a player has played, the single hole they've scored
+ * best on average, relative to par, across every round they've played it
+ * there -- including scramble (same precedent as the ace/birdie/etc.
+ * counts: a hole is a hole) and rounds left early (every hole actually
+ * played is real). Ties are broken by the longer hole, since that's the
+ * more impressive result.
  */
-export function playerBestHole(
+export function playerBestHolesByCourse(
   playerId: string,
   rounds: Round[],
   coursesById: Map<string, Course>,
-): HoleRelStat | null {
+): Map<string, HoleRelStat> {
   const byHole = new Map<string, { courseId: string; holeIndex: number; sum: number; count: number }>();
   for (const round of rounds) {
     const strokes = round.scores[playerId];
@@ -257,7 +258,7 @@ export function playerBestHole(
       byHole.set(key, entry);
     });
   }
-  let best: HoleRelStat | null = null;
+  const bestByCourse = new Map<string, HoleRelStat>();
   for (const { courseId, holeIndex, sum, count } of byHole.values()) {
     const course = coursesById.get(courseId);
     const hole = course?.holes[holeIndex];
@@ -270,12 +271,13 @@ export function playerBestHole(
       avgRelToPar: Math.round((sum / count) * 10) / 10,
       roundsPlayed: count,
     };
+    const current = bestByCourse.get(courseId);
     const better =
-      !best ||
-      candidate.avgRelToPar < best.avgRelToPar ||
-      (candidate.avgRelToPar === best.avgRelToPar &&
-        (candidate.distanceFt ?? -1) > (best.distanceFt ?? -1));
-    if (better) best = candidate;
+      !current ||
+      candidate.avgRelToPar < current.avgRelToPar ||
+      (candidate.avgRelToPar === current.avgRelToPar &&
+        (candidate.distanceFt ?? -1) > (current.distanceFt ?? -1));
+    if (better) bestByCourse.set(courseId, candidate);
   }
-  return best;
+  return bestByCourse;
 }
