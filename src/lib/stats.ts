@@ -229,20 +229,27 @@ export interface HoleRelStat {
   roundsPlayed: number;
 }
 
-/**
- * For each course a player has played, the single hole they've scored
- * best on average, relative to par, across every round they've played it
- * there -- including scramble (same precedent as the ace/birdie/etc.
- * counts: a hole is a hole) and rounds left early (every hole actually
- * played is real). Ties are broken by the longer hole, since that's the
- * more impressive result.
- */
-export function playerBestHolesByCourse(
+/** A hole needs at least this many recorded rounds before it can count as
+ * a player's best/worst hole at a course -- otherwise a single lucky (or
+ * unlucky) throw on an otherwise-unplayed hole would misleadingly win the
+ * title. */
+const MIN_ROUNDS_FOR_HOLE_SUPERLATIVE = 3;
+
+interface HoleAggregate {
+  courseId: string;
+  holeIndex: number;
+  sum: number;
+  count: number;
+}
+
+/** Every hole (course + hole number) a player has ever recorded a score
+ * on, with the running total and count needed to average them. */
+function aggregatePlayerHoles(
   playerId: string,
   rounds: Round[],
   coursesById: Map<string, Course>,
-): Map<string, HoleRelStat> {
-  const byHole = new Map<string, { courseId: string; holeIndex: number; sum: number; count: number }>();
+): Map<string, HoleAggregate> {
+  const byHole = new Map<string, HoleAggregate>();
   for (const round of rounds) {
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
@@ -258,8 +265,20 @@ export function playerBestHolesByCourse(
       byHole.set(key, entry);
     });
   }
-  const bestByCourse = new Map<string, HoleRelStat>();
+  return byHole;
+}
+
+/** Picks one hole per course out of the aggregates, per isBetter (true
+ * when candidate should replace current), requiring at least
+ * MIN_ROUNDS_FOR_HOLE_SUPERLATIVE recorded rounds to qualify. */
+function pickHolePerCourse(
+  byHole: Map<string, HoleAggregate>,
+  coursesById: Map<string, Course>,
+  isBetter: (candidate: HoleRelStat, current: HoleRelStat) => boolean,
+): Map<string, HoleRelStat> {
+  const pickedByCourse = new Map<string, HoleRelStat>();
   for (const { courseId, holeIndex, sum, count } of byHole.values()) {
+    if (count < MIN_ROUNDS_FOR_HOLE_SUPERLATIVE) continue;
     const course = coursesById.get(courseId);
     const hole = course?.holes[holeIndex];
     if (!course || !hole) continue;
@@ -271,13 +290,54 @@ export function playerBestHolesByCourse(
       avgRelToPar: Math.round((sum / count) * 10) / 10,
       roundsPlayed: count,
     };
-    const current = bestByCourse.get(courseId);
-    const better =
-      !current ||
-      candidate.avgRelToPar < current.avgRelToPar ||
-      (candidate.avgRelToPar === current.avgRelToPar &&
-        (candidate.distanceFt ?? -1) > (current.distanceFt ?? -1));
-    if (better) bestByCourse.set(courseId, candidate);
+    const current = pickedByCourse.get(courseId);
+    if (!current || isBetter(candidate, current)) pickedByCourse.set(courseId, candidate);
   }
-  return bestByCourse;
+  return pickedByCourse;
+}
+
+/** Ties are broken by the longer hole, since that's the more impressive
+ * result in either direction (best or worst). */
+function longerHoleWinsTie(candidate: HoleRelStat, current: HoleRelStat): boolean {
+  return (candidate.distanceFt ?? -1) > (current.distanceFt ?? -1);
+}
+
+/**
+ * For each course a player has played, the single hole they've scored
+ * best on average, relative to par, across every round they've played it
+ * there -- including scramble (same precedent as the ace/birdie/etc.
+ * counts: a hole is a hole) and rounds left early (every hole actually
+ * played is real). Only holes with at least MIN_ROUNDS_FOR_HOLE_SUPERLATIVE
+ * recorded scores qualify.
+ */
+export function playerBestHolesByCourse(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): Map<string, HoleRelStat> {
+  const byHole = aggregatePlayerHoles(playerId, rounds, coursesById);
+  return pickHolePerCourse(
+    byHole,
+    coursesById,
+    (candidate, current) =>
+      candidate.avgRelToPar < current.avgRelToPar ||
+      (candidate.avgRelToPar === current.avgRelToPar && longerHoleWinsTie(candidate, current)),
+  );
+}
+
+/** Same as playerBestHolesByCourse, but the hole they've scored worst on
+ * average instead. */
+export function playerWorstHolesByCourse(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): Map<string, HoleRelStat> {
+  const byHole = aggregatePlayerHoles(playerId, rounds, coursesById);
+  return pickHolePerCourse(
+    byHole,
+    coursesById,
+    (candidate, current) =>
+      candidate.avgRelToPar > current.avgRelToPar ||
+      (candidate.avgRelToPar === current.avgRelToPar && longerHoleWinsTie(candidate, current)),
+  );
 }
