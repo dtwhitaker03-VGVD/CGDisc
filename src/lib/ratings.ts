@@ -100,11 +100,19 @@ export function computeHandicapAllowances(
  * than the number of holes. The total strokes given out always equals the
  * input allowance, so summing a "Dynamic" hole-by-hole net always equals
  * the flat "Simple" net -- this only changes which holes get the credit,
- * not the round total.
+ * not the round total. A negative allowance (a plus handicap) gives strokes
+ * back instead, one each on the easiest holes, up to one per hole.
  */
 export function allocateHandicapStrokes(allowance: number, holeOrder: number[]): number[] {
   const strokes = new Array<number>(holeOrder.length).fill(0);
   if (holeOrder.length === 0) return strokes;
+  if (allowance < 0) {
+    const giveBack = Math.min(holeOrder.length, -allowance);
+    for (let i = 0; i < giveBack; i++) {
+      strokes[holeOrder[holeOrder.length - 1 - i]] -= 1;
+    }
+    return strokes;
+  }
   for (let i = 0; i < allowance; i++) {
     strokes[holeOrder[i % holeOrder.length]] += 1;
   }
