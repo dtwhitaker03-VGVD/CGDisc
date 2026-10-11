@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import {
@@ -10,31 +11,170 @@ import {
 } from "../lib/ratings";
 import {
   computeScoreStats,
+  MIN_ROUNDS_FOR_HOLE_SUPERLATIVE,
   playerBestHolesByCourse,
   playerCourseRelToPar,
   playerHoleCounts,
-  playerHoleRanksByCourse,
   playerHoleCountsByCourse,
+  playerHoleStats,
+  playerParTypeStats,
   playerTotalsByCourse,
   playerWorstHolesByCourse,
   type CourseRelStat,
-  type HoleCounts,
   type HoleRelStat,
-  type ScoreStats,
 } from "../lib/stats";
+import { headToHeadRecords, playerNetStats, type Record3 } from "../lib/headToHead";
 import { RatingChart } from "../components/RatingChart";
 import { Card, PageHeader } from "../components/ui";
-import type { Course } from "../types";
+import type { Course, Player, Round } from "../types";
 
-function relToPar(total: number, par: number): string {
-  const rel = total - par;
-  return rel === 0 ? "E" : rel > 0 ? `+${rel}` : `${rel}`;
+function formatVsPar(n: number): string {
+  return n === 0 ? "E" : n > 0 ? `+${n}` : `${n}`;
+}
+
+function formatHandicap(h: number | null): string {
+  return h === null ? "—" : h > 0 ? `+${h}` : `${h}`;
+}
+
+/** One-line tags describing how a round was played (mode and scoring). */
+function roundTags(r: Round): string {
+  const parts: string[] = [];
+  if (r.teamAssignments) {
+    parts.push(
+      r.teamGameType === "scramble"
+        ? "Team · Scramble"
+        : r.teamGameType === "bestBall"
+          ? "Team · Best ball"
+          : r.teamGameType === "teamTotal"
+            ? "Team · Team total"
+            : "Team",
+    );
+  } else {
+    parts.push(r.handicapped ? "Handicapped" : "Straight up");
+  }
+  if (r.teamGameType !== "scramble") parts.push(r.scoringMethod === "holes" ? "By holes" : "By strokes");
+  return parts.join(" · ");
+}
+
+function Count({ n, label, className = "" }: { n: number; label: string; className?: string }) {
+  return (
+    <div>
+      <p className={`text-xl font-bold tabular-nums ${className}`}>{n}</p>
+      <p className="text-[11px] text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+function HoleLine({ kind, stat, color }: { kind: string; stat: HoleRelStat; color: string }) {
+  return (
+    <p className="text-[11px] text-slate-400">
+      {kind} hole: #{stat.holeNumber} (par {stat.par}) ·{" "}
+      <span className={`font-medium ${color}`}>{formatVsPar(stat.avgRelToPar)}</span> avg
+    </p>
+  );
+}
+
+function RecordText({ r }: { r: Record3 | null }) {
+  if (!r) return <span className="text-slate-300">—</span>;
+  const color = r.w > r.l ? "text-green-600" : r.w < r.l ? "text-red-600" : "text-slate-700";
+  return (
+    <span className={`font-semibold tabular-nums ${color}`}>
+      {r.w}-{r.l}-{r.t}
+    </span>
+  );
+}
+
+function PlayerHoleTable({
+  player,
+  courses,
+  rounds,
+}: {
+  player: Player;
+  courses: Course[];
+  rounds: Round[];
+}) {
+  const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
+  const course = courses.find((c) => c.id === courseId) ?? courses[0];
+  if (!course) return null;
+  const stats = playerHoleStats(player.id, course, rounds);
+  const rel = (v: number | null) => (v === null ? "—" : formatVsPar(v));
+  const relColor = (v: number | null) =>
+    v === null ? "" : v < 0 ? "text-green-600" : v > 0 ? "text-red-600" : "text-slate-700";
+  // 1 = best hole (lowest average vs par) .. N = worst; ties go to the hole with more plays, then lower number.
+  const ranks = new Map<number, number>();
+  stats
+    .filter((h) => h.avgRelToPar !== null)
+    .sort(
+      (a, b) =>
+        (a.avgRelToPar as number) - (b.avgRelToPar as number) ||
+        b.plays - a.plays ||
+        a.holeNumber - b.holeNumber,
+    )
+    .forEach((h, i) => ranks.set(h.holeNumber, i + 1));
+  const nines = course.holes.length > 9 ? [stats.slice(0, 9), stats.slice(9)] : [stats];
+
+  return (
+    <Card className="mb-4 overflow-x-auto">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+        Hole by hole
+      </p>
+      <select
+        className="w-full rounded-lg border border-slate-300 px-2 py-2 text-base mb-3"
+        value={course.id}
+        onChange={(e) => setCourseId(e.target.value)}
+      >
+        {courses.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      {nines.map((nine, n) => (
+        <table key={n} className="w-full text-sm tabular-nums mb-2">
+          <thead>
+            <tr className="text-xs text-slate-400">
+              <th className="font-medium text-left pb-1">
+                {nines.length === 1 ? "Hole" : n === 0 ? "Front" : "Back"}
+              </th>
+              <th className="font-medium pb-1">Par</th>
+              <th className="font-medium pb-1">Avg</th>
+              <th className="font-medium pb-1">+/-</th>
+              <th className="font-medium pb-1">Best</th>
+              <th className="font-medium pb-1">Worst</th>
+              <th className="font-medium pb-1">Played</th>
+              <th className="font-medium pb-1" title="1 = your best hole here, by average vs par">
+                Rank
+              </th>
+            </tr>
+          </thead>
+          <tbody className="text-center">
+            {nine.map((h) => (
+              <tr key={h.holeNumber} className="border-t border-slate-100">
+                <td className="py-1 text-left font-medium">{h.holeNumber}</td>
+                <td>{h.par}</td>
+                <td className="font-semibold text-slate-900">{h.average ?? "—"}</td>
+                <td className={`font-semibold ${relColor(h.avgRelToPar)}`}>{rel(h.avgRelToPar)}</td>
+                <td className="text-green-600">{h.best ?? "—"}</td>
+                <td className="text-red-600">{h.worst ?? "—"}</td>
+                <td className="text-slate-400">{h.plays}</td>
+                <td className="font-semibold">{ranks.get(h.holeNumber) ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
+      <p className="text-[11px] text-slate-400">
+        Rank: 1 = your best hole on this course, by average vs par. Every recorded score counts,
+        including holes played before leaving early.
+      </p>
+    </Card>
+  );
 }
 
 export function PlayerStatsPage() {
   const { id } = useParams();
-  const { players, rounds, coursesById } = useAppData();
-  const player = players.find((p) => p.id === id);
+  const { players, playersById, rounds, coursesById } = useAppData();
+  const player = id ? playersById.get(id) : undefined;
 
   if (!player) {
     return (
@@ -44,83 +184,71 @@ export function PlayerStatsPage() {
     );
   }
 
+  const diffs = playerDifferentials(player.id, rounds, coursesById);
+  const handicap = computeHandicap(diffs);
+
   const playerRounds = rounds
     .filter((r) => r.playerIds.includes(player.id) && coursesById.has(r.courseId))
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  const chartPoints = playerRounds
+  const chartPoints = [...playerRounds]
+    .reverse()
     .filter((r) => !r.teamAssignments && r.droppedPlayers?.[player.id] === undefined)
     .map((r) => ({
       date: r.date,
       rating: roundRating(r.scores[player.id], coursesById.get(r.courseId)!),
     }));
 
-  const diffs = playerDifferentials(player.id, rounds, coursesById);
-  const handicap = computeHandicap(diffs);
-
-  // Best course: lowest average relative to par, ties broken by whoever has
-  // more rounds played there (more confidence), then alphabetically. Best
-  // hole: same metric per hole instead of per course, ties broken by the
-  // longer hole (handled inside playerBestHole itself).
-  const courseRelStats = playerCourseRelToPar(player.id, rounds, coursesById);
-  const bestCourseStat: CourseRelStat | undefined = [...courseRelStats].sort((a, b) => {
+  // Best course: lowest average relative to par, ties to whoever has more rounds there, then by name.
+  const courseRel = playerCourseRelToPar(player.id, rounds, coursesById);
+  const bestCourseStat: CourseRelStat | undefined = [...courseRel].sort((a, b) => {
     if (a.avgRelToPar !== b.avgRelToPar) return a.avgRelToPar - b.avgRelToPar;
     if (a.roundsPlayed !== b.roundsPlayed) return b.roundsPlayed - a.roundsPlayed;
-    const nameA = coursesById.get(a.courseId)?.name ?? "";
-    const nameB = coursesById.get(b.courseId)?.name ?? "";
-    return nameA.localeCompare(nameB);
+    return (coursesById.get(a.courseId)?.name ?? "").localeCompare(
+      coursesById.get(b.courseId)?.name ?? "",
+    );
   })[0];
   const bestCourse = bestCourseStat ? coursesById.get(bestCourseStat.courseId) : undefined;
-  const bestHolesByCourse = playerBestHolesByCourse(player.id, rounds, coursesById);
-  const worstHolesByCourse = playerWorstHolesByCourse(player.id, rounds, coursesById);
-  const holeRanksByCourse = playerHoleRanksByCourse(player.id, rounds, coursesById);
-  const holeByHoleCourses = [...holeRanksByCourse.entries()]
-    .map(([courseId, rows]) => ({ course: coursesById.get(courseId), rows }))
-    .filter((c): c is { course: Course; rows: typeof c.rows } => Boolean(c.course))
-    .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
-  const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
+  const h2h = headToHeadRecords(player, players, rounds, coursesById);
+  const net = playerNetStats(player, rounds, coursesById);
+  const parTypes = playerParTypeStats(player.id, rounds, coursesById);
+  const lifetime = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
-  const holeCountsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
-  const courseStatRows = [...totalsByCourse.entries()]
-    .map(([courseId, totals]) => {
+  const countsByCourse = playerHoleCountsByCourse(player.id, rounds, coursesById);
+  const bestHoles = playerBestHolesByCourse(player.id, rounds, coursesById);
+  const worstHoles = playerWorstHolesByCourse(player.id, rounds, coursesById);
+
+  // Every course with any recorded holes gets a row; low / avg / high need complete rounds.
+  const courseRows = [...countsByCourse.entries()]
+    .map(([courseId, counts]) => {
       const course = coursesById.get(courseId);
-      const stats = computeScoreStats(totals);
-      const counts = holeCountsByCourse.get(courseId);
-      if (!course || !stats || !counts) return null;
+      if (!course) return null;
+      const totals = totalsByCourse.get(courseId);
       return {
         course,
-        stats,
         counts,
-        bestHole: bestHolesByCourse.get(courseId),
-        worstHole: worstHolesByCourse.get(courseId),
+        stats: totals ? computeScoreStats(totals) : null,
+        roundsAtCourse: playerRounds.filter((r) => r.courseId === courseId).length,
       };
     })
-    .filter(
-      (
-        row,
-      ): row is {
-        course: Course;
-        stats: ScoreStats;
-        counts: HoleCounts;
-        bestHole: HoleRelStat | undefined;
-        worstHole: HoleRelStat | undefined;
-      } => Boolean(row),
-    )
+    .filter((r): r is NonNullable<typeof r> => Boolean(r))
     .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
   return (
     <div>
-      <PageHeader
-        title={player.name}
-        subtitle={player.isSelf ? "You" : "Friend"}
-      />
+      <PageHeader title={player.name} subtitle={player.isSelf ? "You" : "Friend"} />
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <Card>
           <p className="text-xs text-slate-400 mb-1">Handicap</p>
           <p className="text-2xl font-bold tabular-nums" style={{ color: player.color }}>
-            {handicap === null ? "—" : handicap > 0 ? `+${handicap}` : handicap}
+            {formatHandicap(handicap)}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {handicap !== null
+              ? `Best of ${Math.min(diffs.length, 20)} recent rounds`
+              : `${diffs.length} of 3 rounds needed`}
           </p>
         </Card>
         <Card>
@@ -134,21 +262,18 @@ export function PlayerStatsPage() {
           Best course
         </p>
         {bestCourse && bestCourseStat ? (
-          <div className="flex items-center justify-between">
+          <Link to={`/courses/${bestCourse.id}`} className="flex items-center justify-between">
             <p className="font-semibold text-slate-900 text-sm">{bestCourse.name}</p>
             <p className="text-right">
               <span className="text-lg font-bold tabular-nums" style={{ color: player.color }}>
-                {bestCourseStat.avgRelToPar === 0
-                  ? "E"
-                  : bestCourseStat.avgRelToPar > 0
-                    ? `+${bestCourseStat.avgRelToPar}`
-                    : bestCourseStat.avgRelToPar}
+                {formatVsPar(bestCourseStat.avgRelToPar)}
               </span>{" "}
               <span className="text-[11px] text-slate-400">
-                {bestCourseStat.roundsPlayed} round{bestCourseStat.roundsPlayed === 1 ? "" : "s"}
+                avg · {bestCourseStat.roundsPlayed} round
+                {bestCourseStat.roundsPlayed === 1 ? "" : "s"}
               </span>
             </p>
-          </div>
+          </Link>
         ) : (
           <p className="text-sm text-slate-400">—</p>
         )}
@@ -165,55 +290,159 @@ export function PlayerStatsPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
           Lifetime hole scores
         </p>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div>
-            <p className="text-xl font-bold tabular-nums">{lifetimeHoleCounts.aces}</p>
-            <p className="text-[11px] text-slate-400">Aces</p>
-          </div>
-          <div>
-            <p className="text-xl font-bold tabular-nums text-green-600">
-              {lifetimeHoleCounts.birdies}
-            </p>
-            <p className="text-[11px] text-slate-400">Birdies</p>
-          </div>
-          <div>
-            <p className="text-xl font-bold tabular-nums">{lifetimeHoleCounts.pars}</p>
-            <p className="text-[11px] text-slate-400">Pars</p>
-          </div>
-          <div>
-            <p className="text-xl font-bold tabular-nums text-amber-600">
-              {lifetimeHoleCounts.bogeys}
-            </p>
-            <p className="text-[11px] text-slate-400">Bogeys</p>
-          </div>
-          <div>
-            <p className="text-xl font-bold tabular-nums text-red-600">
-              {lifetimeHoleCounts.doubleBogeys}
-            </p>
-            <p className="text-[11px] text-slate-400">Double bogeys</p>
-          </div>
-          <div>
-            <p className="text-xl font-bold tabular-nums text-red-700">
-              {lifetimeHoleCounts.triplePlusBogeys}
-            </p>
-            <p className="text-[11px] text-slate-400">Triple+ bogeys</p>
-          </div>
+        <div className="grid grid-cols-4 gap-3 text-center">
+          <Count n={lifetime.aces} label="Aces" />
+          <Count n={lifetime.eagles} label="Eagles" className="text-green-700" />
+          <Count n={lifetime.birdies} label="Birdies" className="text-green-600" />
+          <Count n={lifetime.pars} label="Pars" />
+          <Count n={lifetime.bogeys} label="Bogeys" className="text-amber-600" />
+          <Count n={lifetime.doubleBogeys} label="Double bogeys" className="text-red-600" />
+          <Count n={lifetime.triplePlusBogeys} label="Triple+ bogeys" className="text-red-700" />
         </div>
         <p className="text-center text-[11px] text-slate-400 mt-3">
-          {lifetimeHoleCounts.holesPlayed} holes played
+          {lifetime.holesPlayed} holes played
         </p>
       </Card>
 
       <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Net scores
+        </p>
+        {net ? (
+          <>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-xs text-slate-400">Best net</p>
+                <Link
+                  to={`/round/${net.bestRoundId}`}
+                  className="text-xl font-bold text-green-600 tabular-nums"
+                >
+                  {net.bestNet}
+                </Link>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Avg net</p>
+                <p className="text-xl font-bold tabular-nums">{net.avgNet}</p>
+                <p className="text-[11px] text-slate-400">gross {net.avgGross}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Net under par</p>
+                <p className="text-xl font-bold tabular-nums">
+                  {net.beatPar}{" "}
+                  <span className="text-xs text-slate-400 font-normal">of {net.rounds}</span>
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-2">
+              Complete rounds, with strokes from the current handicap ({formatHandicap(handicap)}).
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">Needs a handicap (3+ rounds).</p>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Scoring by hole type
+        </p>
+        {parTypes.length === 0 ? (
+          <p className="text-sm text-slate-500">No holes logged yet.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {parTypes.map((t) => (
+              <div key={t.par}>
+                <p className="text-xs text-slate-400">Par {t.par}s</p>
+                <p className="text-xl font-bold tabular-nums">{t.average}</p>
+                <p
+                  className={`text-xs font-medium ${t.avgRelToPar > 0 ? "text-red-600" : "text-green-600"}`}
+                >
+                  {t.avgRelToPar > 0 ? "+" : ""}
+                  {t.avgRelToPar} per hole
+                </p>
+                <p className="text-[11px] text-slate-400">{t.holes} holes</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Head to head
+        </p>
+        {h2h.length === 0 ? (
+          <p className="text-sm text-slate-500">No shared rounds yet.</p>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-slate-400">
+                  <th className="font-medium text-left pb-1">vs</th>
+                  <th className="font-medium pb-1">Straight up</th>
+                  <th className="font-medium pb-1">With handicap</th>
+                </tr>
+              </thead>
+              <tbody className="text-center">
+                {h2h.map((row) => {
+                  const opp = playersById.get(row.opponentId);
+                  if (!opp) return null;
+                  return (
+                    <tr key={row.opponentId} className="border-t border-slate-100">
+                      <td className="py-2 text-left">
+                        <Link to={`/stats/${opp.id}`} className="font-medium text-slate-800">
+                          {opp.name}
+                        </Link>
+                        <p className="text-[11px] text-slate-400">
+                          {row.rounds} round{row.rounds === 1 ? "" : "s"}
+                        </p>
+                      </td>
+                      <td>
+                        <RecordText r={row.straight} />
+                        <p className="text-[11px] text-slate-400">
+                          holes <RecordText r={row.holesStraight} />
+                        </p>
+                      </td>
+                      <td>
+                        <RecordText r={row.handicap} />
+                        <p className="text-[11px] text-slate-400">
+                          holes <RecordText r={row.holesHandicap} />
+                        </p>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-slate-400 mt-2">
+              Wins-losses-ties from {player.name}'s side. Round records need both players to finish
+              the same holes. The handicap column replays each round using both players' current
+              handicaps, so it's hypothetical.
+            </p>
+          </>
+        )}
+      </Card>
+
+      {courseRows.length > 0 && (
+        <PlayerHoleTable
+          player={player}
+          courses={courseRows.map((r) => r.course)}
+          rounds={rounds}
+        />
+      )}
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
           By course
         </p>
-        {courseStatRows.length === 0 ? (
+        {courseRows.length === 0 ? (
           <p className="text-sm text-slate-500">No rounds logged yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {courseStatRows.map(({ course, stats, counts, bestHole, worstHole }) => {
+            {courseRows.map(({ course, counts, stats, roundsAtCourse }) => {
               const par = coursePar(course);
+              const best = bestHoles.get(course.id);
+              const worst = worstHoles.get(course.id);
               return (
                 <li key={course.id}>
                   <Link to={`/courses/${course.id}`} className="block py-2.5">
@@ -221,116 +450,48 @@ export function PlayerStatsPage() {
                       <p className="font-medium text-slate-800 text-sm">
                         {course.name}{" "}
                         <span className="text-[11px] text-slate-400 font-normal">
-                          · {stats.rounds} rounds
+                          · {roundsAtCourse} round{roundsAtCourse === 1 ? "" : "s"}
                         </span>
                       </p>
-                      <p className="text-sm tabular-nums text-right shrink-0">
-                        <span className="text-green-600 font-semibold">
-                          {stats.low} ({relToPar(stats.low, par)})
-                        </span>
-                        {" / "}
-                        <span className="text-slate-900 font-semibold">{stats.average}</span>
-                        {" / "}
-                        <span className="text-red-600 font-semibold">
-                          {stats.high} ({relToPar(stats.high, par)})
-                        </span>
-                      </p>
+                      {stats ? (
+                        <p className="text-sm tabular-nums text-right shrink-0">
+                          <span className="text-green-600 font-semibold">
+                            {stats.low} ({formatVsPar(stats.low - par)})
+                          </span>
+                          {" / "}
+                          <span className="text-slate-900 font-semibold">{stats.average}</span>
+                          {" / "}
+                          <span className="text-red-600 font-semibold">
+                            {stats.high} ({formatVsPar(stats.high - par)})
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 shrink-0">
+                          no complete rounds yet
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mt-1">
                       <span className="text-slate-500">{counts.aces} Ace</span>
+                      <span className="text-green-700">{counts.eagles} Eagle</span>
                       <span className="text-green-600">{counts.birdies} Birdie</span>
                       <span className="text-slate-500">{counts.pars} Par</span>
                       <span className="text-amber-600">{counts.bogeys} Bogey</span>
                       <span className="text-red-600">{counts.doubleBogeys} Dbl</span>
                       <span className="text-red-700">{counts.triplePlusBogeys} Tpl+</span>
                     </div>
-                    {bestHole && (
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Best hole: #{bestHole.holeNumber} (par {bestHole.par}
-                        {bestHole.distanceFt ? ` · ${bestHole.distanceFt}ft` : ""}) ·{" "}
-                        <span className="font-medium text-green-600">
-                          {bestHole.avgRelToPar === 0
-                            ? "E"
-                            : bestHole.avgRelToPar > 0
-                              ? `+${bestHole.avgRelToPar}`
-                              : bestHole.avgRelToPar}
-                        </span>{" "}
-                        avg
-                      </p>
-                    )}
-                    {worstHole && (
-                      <p className="text-[11px] text-slate-400">
-                        Worst hole: #{worstHole.holeNumber} (par {worstHole.par}
-                        {worstHole.distanceFt ? ` · ${worstHole.distanceFt}ft` : ""}) ·{" "}
-                        <span className="font-medium text-red-600">
-                          {worstHole.avgRelToPar === 0
-                            ? "E"
-                            : worstHole.avgRelToPar > 0
-                              ? `+${worstHole.avgRelToPar}`
-                              : worstHole.avgRelToPar}
-                        </span>{" "}
-                        avg
-                      </p>
-                    )}
+                    {best && <HoleLine kind="Best" stat={best} color="text-green-600" />}
+                    {worst && <HoleLine kind="Worst" stat={worst} color="text-red-600" />}
                   </Link>
                 </li>
               );
             })}
           </ul>
         )}
+        <p className="text-[11px] text-slate-400 mt-2">
+          Best and worst hole need {MIN_ROUNDS_FOR_HOLE_SUPERLATIVE}+ scores on that hole.
+        </p>
       </Card>
-
-      {holeByHoleCourses.length > 0 && (
-        <Card className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
-            Hole by hole
-          </p>
-          <p className="text-[11px] text-slate-400 mb-3">
-            Average vs par per hole. Rank 1 is your best hole at the course.
-          </p>
-          <div className="space-y-4">
-            {holeByHoleCourses.map(({ course, rows }) => (
-              <div key={course.id}>
-                <p className="font-medium text-slate-800 text-sm mb-1">{course.name}</p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-slate-400 text-xs">
-                      <th className="text-left font-medium pb-1">Hole</th>
-                      <th className="font-medium pb-1 text-center">Avg</th>
-                      <th className="font-medium pb-1 text-center">Played</th>
-                      <th className="font-medium pb-1 text-center">Rank</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.holeNumber} className="border-t border-slate-100">
-                        <td className="py-1 whitespace-nowrap">
-                          #{r.holeNumber} <span className="text-slate-400">(par {r.par})</span>
-                        </td>
-                        <td className="py-1 text-center tabular-nums">
-                          {r.avgRelToPar === null
-                            ? "—"
-                            : r.avgRelToPar === 0
-                              ? "E"
-                              : r.avgRelToPar > 0
-                                ? `+${r.avgRelToPar}`
-                                : r.avgRelToPar}
-                        </td>
-                        <td className="py-1 text-center tabular-nums text-slate-500">
-                          {r.roundsPlayed || "—"}
-                        </td>
-                        <td className="py-1 text-center tabular-nums font-semibold">
-                          {r.rank ?? "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       <Card>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
@@ -340,11 +501,11 @@ export function PlayerStatsPage() {
           <p className="text-sm text-slate-500">No rounds yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {[...playerRounds].reverse().map((r) => {
+            {playerRounds.map((r) => {
               const course = coursesById.get(r.courseId)!;
               const strokes = r.scores[player.id];
-              const droppedAt = r.droppedPlayers?.[player.id];
-              const rel = scoreToPar(strokes, course, droppedAt);
+              const left = r.droppedPlayers?.[player.id];
+              const rel = scoreToPar(strokes, course, left);
               return (
                 <li key={r.id}>
                   <Link to={`/round/${r.id}`} className="flex items-center justify-between py-2.5">
@@ -354,14 +515,14 @@ export function PlayerStatsPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-semibold tabular-nums text-sm">
-                        {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                        {totalScore(strokes)} ({formatVsPar(rel)})
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {droppedAt !== undefined
-                          ? `Left after hole ${droppedAt}`
+                        {left !== undefined
+                          ? `Left after hole ${left}`
                           : r.teamAssignments
-                            ? "Team round"
-                            : `Rating ${roundRating(strokes, course)}`}
+                            ? roundTags(r)
+                            : `${roundTags(r)} · Rating ${roundRating(strokes, course)}`}
                       </p>
                     </div>
                   </Link>

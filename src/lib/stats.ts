@@ -19,7 +19,7 @@ export function validRoundTotal(strokes: number[] | undefined): number | null {
  * bestBall/teamTotal team rounds, false for scramble (and legacy team
  * rounds with no recorded game type), where the whole team shares one
  * score. Mirrors playerDifferentials' handicap/rating exclusion. */
-function isIndividuallyScored(round: Round): boolean {
+export function isIndividuallyScored(round: Round): boolean {
   if (!round.teamAssignments) return true;
   return round.teamGameType === "bestBall" || round.teamGameType === "teamTotal";
 }
@@ -157,6 +157,7 @@ export function rankCourseHoleHandicaps(holeAverages: HoleAverageStat[]): HoleHa
 export interface HoleCounts {
   holesPlayed: number;
   aces: number;
+  eagles: number;
   birdies: number;
   pars: number;
   bogeys: number;
@@ -168,6 +169,7 @@ function emptyHoleCounts(): HoleCounts {
   return {
     holesPlayed: 0,
     aces: 0,
+    eagles: 0,
     birdies: 0,
     pars: 0,
     bogeys: 0,
@@ -178,10 +180,8 @@ function emptyHoleCounts(): HoleCounts {
 
 /**
  * Classifies one hole's score relative to par and tallies it into counts.
- * A score of 1 is always an ace, regardless of par. Anything 2-or-more
- * under par that isn't an ace (an eagle or better) is counted as a birdie --
- * there's no separate eagle bucket, since they're rare enough on a casual
- * group's courses not to warrant their own category.
+ * A score of 1 is always an ace, regardless of par; otherwise 2+ under par
+ * is an eagle, 1 under a birdie, and so on.
  */
 function classifyHole(strokes: number, par: number, counts: HoleCounts): void {
   counts.holesPlayed += 1;
@@ -190,7 +190,8 @@ function classifyHole(strokes: number, par: number, counts: HoleCounts): void {
     return;
   }
   const diff = strokes - par;
-  if (diff <= -1) counts.birdies += 1;
+  if (diff <= -2) counts.eagles += 1;
+  else if (diff === -1) counts.birdies += 1;
   else if (diff === 0) counts.pars += 1;
   else if (diff === 1) counts.bogeys += 1;
   else if (diff === 2) counts.doubleBogeys += 1;
@@ -321,7 +322,7 @@ export interface HoleRelStat {
  * a player's best/worst hole at a course -- otherwise a single lucky (or
  * unlucky) throw on an otherwise-unplayed hole would misleadingly win the
  * title. */
-const MIN_ROUNDS_FOR_HOLE_SUPERLATIVE = 3;
+export const MIN_ROUNDS_FOR_HOLE_SUPERLATIVE = 2;
 
 interface HoleAggregate {
   courseId: string;
@@ -430,64 +431,85 @@ export function playerWorstHolesByCourse(
   );
 }
 
-export interface PlayerHoleRank {
+export interface PlayerHoleStat {
   holeNumber: number;
   par: number;
-  distanceFt?: number;
-  /** Average score relative to par on this hole, null if never played. */
+  plays: number;
+  average: number | null;
+  best: number | null;
+  worst: number | null;
+  /** Average strokes over par on this hole (negative = under par). */
   avgRelToPar: number | null;
-  roundsPlayed: number;
-  /** 1 = this player's best hole at the course, N = worst; null if never played. */
-  rank: number | null;
 }
 
 /**
- * For each course a player has played, every hole with their average
- * score relative to par and a rank from best (1) to worst. Unlike best/
- * worst hole there's no minimum rounds -- any hole played at least once
- * is ranked; unplayed holes are listed but unranked (so a player who's
- * only played 9 holes of an 18-hole course gets ranks 1-9). Ties go to
- * the hole played more often, then the lower hole number.
+ * One player's results on every hole of a course: plays, average, best,
+ * worst, and average vs par. Every recorded score counts, including holes
+ * played before leaving a round early.
  */
-export function playerHoleRanksByCourse(
+export function playerHoleStats(playerId: string, course: Course, rounds: Round[]): PlayerHoleStat[] {
+  const acc = course.holes.map(() => ({ sum: 0, n: 0, best: Infinity, worst: 0 }));
+  for (const round of rounds) {
+    if (round.courseId !== course.id) continue;
+    const strokes = round.scores[playerId];
+    if (!strokes) continue;
+    strokes.forEach((s, i) => {
+      if (!Number.isFinite(s) || s <= 0 || i >= acc.length) return;
+      const a = acc[i];
+      a.sum += s;
+      a.n += 1;
+      a.best = Math.min(a.best, s);
+      a.worst = Math.max(a.worst, s);
+    });
+  }
+  return course.holes.map((h, i) => {
+    const a = acc[i];
+    return {
+      holeNumber: h.number,
+      par: h.par,
+      plays: a.n,
+      average: a.n ? Math.round((a.sum / a.n) * 10) / 10 : null,
+      best: a.n ? a.best : null,
+      worst: a.n ? a.worst : null,
+      avgRelToPar: a.n ? Math.round((a.sum / a.n - h.par) * 10) / 10 : null,
+    };
+  });
+}
+
+export interface ParTypeStat {
+  par: number;
+  holes: number;
+  average: number;
+  /** Average strokes over par. */
+  avgRelToPar: number;
+}
+
+/** A player's scoring on par 3s, 4s and 5s across every recorded hole. */
+export function playerParTypeStats(
   playerId: string,
   rounds: Round[],
   coursesById: Map<string, Course>,
-): Map<string, PlayerHoleRank[]> {
-  const byHole = aggregatePlayerHoles(playerId, rounds, coursesById);
-  const playedByCourse = new Map<string, Map<number, HoleAggregate>>();
-  for (const agg of byHole.values()) {
-    const holes = playedByCourse.get(agg.courseId) ?? new Map<number, HoleAggregate>();
-    holes.set(agg.holeIndex, agg);
-    playedByCourse.set(agg.courseId, holes);
-  }
-
-  const result = new Map<string, PlayerHoleRank[]>();
-  for (const [courseId, holes] of playedByCourse) {
-    const course = coursesById.get(courseId);
-    if (!course) continue;
-    const rows: PlayerHoleRank[] = course.holes.map((hole, i) => {
-      const agg = holes.get(i);
-      return {
-        holeNumber: hole.number,
-        par: hole.par,
-        distanceFt: hole.distanceFt,
-        avgRelToPar: agg ? Math.round((agg.sum / agg.count) * 100) / 100 : null,
-        roundsPlayed: agg?.count ?? 0,
-        rank: null,
-      };
+): ParTypeStat[] {
+  const acc = new Map<number, { sum: number; n: number }>();
+  for (const round of rounds) {
+    const course = coursesById.get(round.courseId);
+    const strokes = round.scores[playerId];
+    if (!course || !strokes) continue;
+    strokes.forEach((s, i) => {
+      const hole = course.holes[i];
+      if (!hole || !Number.isFinite(s) || s <= 0) return;
+      const a = acc.get(hole.par) ?? { sum: 0, n: 0 };
+      a.sum += s;
+      a.n += 1;
+      acc.set(hole.par, a);
     });
-    rows
-      .filter((r) => r.avgRelToPar !== null)
-      .sort((a, b) => {
-        if (a.avgRelToPar !== b.avgRelToPar) return (a.avgRelToPar ?? 0) - (b.avgRelToPar ?? 0);
-        if (a.roundsPlayed !== b.roundsPlayed) return b.roundsPlayed - a.roundsPlayed;
-        return a.holeNumber - b.holeNumber;
-      })
-      .forEach((r, i) => {
-        r.rank = i + 1;
-      });
-    result.set(courseId, rows);
   }
-  return result;
+  return [...acc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([par, { sum, n }]) => ({
+      par,
+      holes: n,
+      average: Math.round((sum / n) * 100) / 100,
+      avgRelToPar: Math.round((sum / n - par) * 100) / 100,
+    }));
 }
