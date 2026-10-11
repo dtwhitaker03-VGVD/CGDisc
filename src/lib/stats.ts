@@ -429,3 +429,65 @@ export function playerWorstHolesByCourse(
       (candidate.avgRelToPar === current.avgRelToPar && longerHoleWinsTie(candidate, current)),
   );
 }
+
+export interface PlayerHoleRank {
+  holeNumber: number;
+  par: number;
+  distanceFt?: number;
+  /** Average score relative to par on this hole, null if never played. */
+  avgRelToPar: number | null;
+  roundsPlayed: number;
+  /** 1 = this player's best hole at the course, N = worst; null if never played. */
+  rank: number | null;
+}
+
+/**
+ * For each course a player has played, every hole with their average
+ * score relative to par and a rank from best (1) to worst. Unlike best/
+ * worst hole there's no minimum rounds -- any hole played at least once
+ * is ranked; unplayed holes are listed but unranked (so a player who's
+ * only played 9 holes of an 18-hole course gets ranks 1-9). Ties go to
+ * the hole played more often, then the lower hole number.
+ */
+export function playerHoleRanksByCourse(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): Map<string, PlayerHoleRank[]> {
+  const byHole = aggregatePlayerHoles(playerId, rounds, coursesById);
+  const playedByCourse = new Map<string, Map<number, HoleAggregate>>();
+  for (const agg of byHole.values()) {
+    const holes = playedByCourse.get(agg.courseId) ?? new Map<number, HoleAggregate>();
+    holes.set(agg.holeIndex, agg);
+    playedByCourse.set(agg.courseId, holes);
+  }
+
+  const result = new Map<string, PlayerHoleRank[]>();
+  for (const [courseId, holes] of playedByCourse) {
+    const course = coursesById.get(courseId);
+    if (!course) continue;
+    const rows: PlayerHoleRank[] = course.holes.map((hole, i) => {
+      const agg = holes.get(i);
+      return {
+        holeNumber: hole.number,
+        par: hole.par,
+        distanceFt: hole.distanceFt,
+        avgRelToPar: agg ? Math.round((agg.sum / agg.count) * 100) / 100 : null,
+        roundsPlayed: agg?.count ?? 0,
+        rank: null,
+      };
+    });
+    rows
+      .filter((r) => r.avgRelToPar !== null)
+      .sort((a, b) => {
+        if (a.avgRelToPar !== b.avgRelToPar) return (a.avgRelToPar ?? 0) - (b.avgRelToPar ?? 0);
+        if (a.roundsPlayed !== b.roundsPlayed) return b.roundsPlayed - a.roundsPlayed;
+        return a.holeNumber - b.holeNumber;
+      })
+      .forEach((r, i) => {
+        r.rank = i + 1;
+      });
+    result.set(courseId, rows);
+  }
+  return result;
+}

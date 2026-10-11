@@ -13,6 +13,7 @@ import {
   playerBestHolesByCourse,
   playerCourseRelToPar,
   playerHoleCounts,
+  playerHoleRanksByCourse,
   playerHoleCountsByCourse,
   playerTotalsByCourse,
   playerWorstHolesByCourse,
@@ -72,6 +73,11 @@ export function PlayerStatsPage() {
   const bestCourse = bestCourseStat ? coursesById.get(bestCourseStat.courseId) : undefined;
   const bestHolesByCourse = playerBestHolesByCourse(player.id, rounds, coursesById);
   const worstHolesByCourse = playerWorstHolesByCourse(player.id, rounds, coursesById);
+  const holeRanksByCourse = playerHoleRanksByCourse(player.id, rounds, coursesById);
+  const holeByHoleCourses = [...holeRanksByCourse.entries()]
+    .map(([courseId, rows]) => ({ course: coursesById.get(courseId), rows }))
+    .filter((c): c is { course: Course; rows: typeof c.rows } => Boolean(c.course))
+    .sort((a, b) => a.course.name.localeCompare(b.course.name));
 
   const lifetimeHoleCounts = playerHoleCounts(player.id, rounds, coursesById);
   const totalsByCourse = playerTotalsByCourse(player.id, rounds);
@@ -273,6 +279,58 @@ export function PlayerStatsPage() {
           </ul>
         )}
       </Card>
+
+      {holeByHoleCourses.length > 0 && (
+        <Card className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
+            Hole by hole
+          </p>
+          <p className="text-[11px] text-slate-400 mb-3">
+            Average vs par per hole. Rank 1 is your best hole at the course.
+          </p>
+          <div className="space-y-4">
+            {holeByHoleCourses.map(({ course, rows }) => (
+              <div key={course.id}>
+                <p className="font-medium text-slate-800 text-sm mb-1">{course.name}</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 text-xs">
+                      <th className="text-left font-medium pb-1">Hole</th>
+                      <th className="font-medium pb-1 text-center">Avg</th>
+                      <th className="font-medium pb-1 text-center">Played</th>
+                      <th className="font-medium pb-1 text-center">Rank</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.holeNumber} className="border-t border-slate-100">
+                        <td className="py-1 whitespace-nowrap">
+                          #{r.holeNumber} <span className="text-slate-400">(par {r.par})</span>
+                        </td>
+                        <td className="py-1 text-center tabular-nums">
+                          {r.avgRelToPar === null
+                            ? "—"
+                            : r.avgRelToPar === 0
+                              ? "E"
+                              : r.avgRelToPar > 0
+                                ? `+${r.avgRelToPar}`
+                                : r.avgRelToPar}
+                        </td>
+                        <td className="py-1 text-center tabular-nums text-slate-500">
+                          {r.roundsPlayed || "—"}
+                        </td>
+                        <td className="py-1 text-center tabular-nums font-semibold">
+                          {r.rank ?? "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
