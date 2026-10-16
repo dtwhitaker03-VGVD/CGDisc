@@ -23,6 +23,7 @@ import {
   type CourseRelStat,
   type HoleRelStat,
 } from "../lib/stats";
+import { roundTags } from "../lib/roundTags";
 import { headToHeadRecords, playerNetStats, type Record3 } from "../lib/headToHead";
 import { RatingChart } from "../components/RatingChart";
 import { Card, PageHeader } from "../components/ui";
@@ -34,26 +35,6 @@ function formatVsPar(n: number): string {
 
 function formatHandicap(h: number | null): string {
   return h === null ? "—" : h > 0 ? `+${h}` : `${h}`;
-}
-
-/** One-line tags describing how a round was played (mode and scoring). */
-function roundTags(r: Round): string {
-  const parts: string[] = [];
-  if (r.teamAssignments) {
-    parts.push(
-      r.teamGameType === "scramble"
-        ? "Team · Scramble"
-        : r.teamGameType === "bestBall"
-          ? "Team · Best ball"
-          : r.teamGameType === "teamTotal"
-            ? "Team · Team total"
-            : "Team",
-    );
-  } else {
-    parts.push(r.handicapped ? "Handicapped" : "Straight up");
-  }
-  if (r.teamGameType !== "scramble") parts.push(r.scoringMethod === "holes" ? "By holes" : "By strokes");
-  return parts.join(" · ");
 }
 
 function Count({ n, label, className = "" }: { n: number; label: string; className?: string }) {
