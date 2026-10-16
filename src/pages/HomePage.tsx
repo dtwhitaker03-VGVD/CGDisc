@@ -1,29 +1,26 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { useAuth } from "../store/AuthContext";
-import { computeHandicap, playerDifferentials, roundRating, scoreToPar } from "../lib/ratings";
+import { scoreToPar, totalScore } from "../lib/ratings";
+import { roundTags } from "../lib/roundTags";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 import { LegacyImportCard } from "../components/LegacyImportCard";
 import { IosInstallHint } from "../components/IosInstallHint";
 
+const RECENT_ROUNDS = 5;
+const MAX_PLAYERS_SHOWN = 4;
+
 export function HomePage() {
-  const { players, rounds, courses, coursesById } = useAppData();
+  const { players, playersById, rounds, courses, coursesById } = useAppData();
   const { session, signOut } = useAuth();
 
-  const standings = players
-    .map((p) => {
-      const diffs = playerDifferentials(p.id, rounds, coursesById);
-      return { player: p, handicap: computeHandicap(diffs), roundsPlayed: diffs.length };
-    })
-    .sort((a, b) => {
-      if (a.handicap === null && b.handicap === null) return 0;
-      if (a.handicap === null) return 1;
-      if (b.handicap === null) return -1;
-      return a.handicap - b.handicap;
-    });
-
-  const lastRound = [...rounds].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
-  const lastCourse = lastRound ? coursesById.get(lastRound.courseId) : undefined;
+  // Newest first; rounds logged the same day fall back to when they were saved.
+  const recentRounds = [...rounds]
+    .filter((r) => coursesById.has(r.courseId))
+    .sort((a, b) =>
+      a.date === b.date ? (a.createdAt < b.createdAt ? 1 : -1) : a.date < b.date ? 1 : -1,
+    )
+    .slice(0, RECENT_ROUNDS);
 
   return (
     <div>
@@ -54,81 +51,69 @@ export function HomePage() {
         </Link>
       </p>
 
-      {lastRound && lastCourse && (
-        <Card className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-            Last round
-          </p>
-          <Link to={`/round/${lastRound.id}`} className="block">
-            <p className="font-semibold text-slate-900">{lastCourse.name}</p>
-            <p className="text-sm text-slate-500">{lastRound.date}</p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {lastRound.playerIds.map((pid) => {
-                const strokes = lastRound.scores[pid];
-                const player = players.find((p) => p.id === pid);
-                if (!strokes || !player) return null;
-                const droppedAt = lastRound.droppedPlayers?.[pid];
-                const rel = scoreToPar(strokes, lastCourse, droppedAt);
-                return (
-                  <div key={pid} className="text-sm">
-                    <span className="font-medium" style={{ color: player.color }}>
-                      {player.name}
-                    </span>{" "}
-                    <span className="tabular-nums">
-                      {rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel}
-                    </span>{" "}
-                    <span className="text-slate-400">
-                      ·{" "}
-                      {droppedAt !== undefined
-                        ? `left after hole ${droppedAt}`
-                        : `rating ${roundRating(strokes, lastCourse)}`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </Link>
-        </Card>
-      )}
-
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
-          Handicap leaderboard
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
+          Recent rounds
         </p>
         {players.length === 0 ? (
           <EmptyState
             icon="👥"
             title="No players yet"
-            subtitle="Add your friends to start tracking handicaps together."
+            subtitle="Add your friends to start tracking rounds together."
             action={<LinkButton to="/players">Add players</LinkButton>}
           />
-        ) : rounds.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Play a round to see ratings and handicaps here.
-          </p>
+        ) : recentRounds.length === 0 ? (
+          <p className="text-sm text-slate-500">Play a round to see activity here.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {standings.map(({ player, handicap, roundsPlayed }, i) => (
-              <li key={player.id} className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-sm text-slate-400 w-4">{i + 1}</span>
-                  <span
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: player.color }}
-                  />
-                  <span className="font-medium text-slate-800">
-                    {player.name}
-                    {player.isSelf ? " (you)" : ""}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold tabular-nums">
-                    {handicap === null ? "—" : handicap > 0 ? `+${handicap}` : handicap}
-                  </div>
-                  <div className="text-[11px] text-slate-400">{roundsPlayed} rounds</div>
-                </div>
-              </li>
-            ))}
+            {recentRounds.map((round) => {
+              const course = coursesById.get(round.courseId)!;
+              const results = round.playerIds
+                .map((pid) => {
+                  const player = playersById.get(pid);
+                  const strokes = round.scores[pid];
+                  if (!player || !strokes) return null;
+                  const droppedAt = round.droppedPlayers?.[pid];
+                  return {
+                    player,
+                    total: totalScore(strokes),
+                    rel: scoreToPar(strokes, course, droppedAt),
+                    droppedAt,
+                  };
+                })
+                .filter((r): r is NonNullable<typeof r> => Boolean(r))
+                .sort((a, b) => a.rel - b.rel);
+              const shown = results.slice(0, MAX_PLAYERS_SHOWN);
+              return (
+                <li key={round.id}>
+                  <Link to={`/round/${round.id}`} className="block py-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="font-semibold text-slate-900 text-sm">{course.name}</p>
+                      <p className="text-xs text-slate-400 shrink-0">{round.date}</p>
+                    </div>
+                    <p className="text-[11px] text-slate-400">{roundTags(round)}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
+                      {shown.map(({ player, total, rel, droppedAt }) => (
+                        <span key={player.id}>
+                          <span className="font-medium" style={{ color: player.color }}>
+                            {player.name}
+                          </span>{" "}
+                          <span className="tabular-nums text-slate-600">
+                            {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                          </span>
+                          {droppedAt !== undefined && (
+                            <span className="text-amber-600 text-xs"> · left h{droppedAt}</span>
+                          )}
+                        </span>
+                      ))}
+                      {results.length > shown.length && (
+                        <span className="text-slate-400">+{results.length - shown.length} more</span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
