@@ -8,7 +8,11 @@ import {
   playerDifferentials,
   totalScore,
 } from "../lib/ratings";
-import { courseHoleAverages, courseHoleHandicapOrder } from "../lib/stats";
+import {
+  courseHoleAverages,
+  courseHoleHandicapOrder,
+  rankCourseHoleHandicaps,
+} from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { RoundClock } from "../components/RoundClock";
@@ -204,7 +208,7 @@ export function NewRoundPage() {
 
   // Past low / average / high per hole at this course, shown while scoring.
   const holeStats = useMemo(
-    () => (course ? courseHoleAverages(course, rounds) : []),
+    () => (course ? rankCourseHoleHandicaps(courseHoleAverages(course, rounds)) : []),
     [course, rounds],
   );
 
@@ -1411,6 +1415,13 @@ export function NewRoundPage() {
               {" · "}High <span className="font-semibold text-red-600">{activeHoleStat.high}</span>
             </p>
           )}
+          {activeHoleStat?.handicapRank != null && (
+            <p className="text-xs text-slate-500 tabular-nums" title="1 = hardest hole">
+              Handicap{" "}
+              <span className="font-semibold text-slate-800">{activeHoleStat.handicapRank}</span> of{" "}
+              {holeStats.filter((h) => h.handicapRank != null).length} (1 = hardest)
+            </p>
+          )}
         </div>
         <p className="text-sm text-slate-400">
           {activeHoleIndex + 1} of {course.holes.length}
@@ -1451,6 +1462,10 @@ export function NewRoundPage() {
               if (!player || !playerScores) return null;
               const total = liveTotal(playerScores);
               const rel = liveRelToPar(playerScores);
+              // Handicapped rounds: strokes this player gets (or gives back) on this hole.
+              const holeStrokes = isHandicapped
+                ? (allocateHandicapStrokes(allowances[pid] ?? 0, dynamicHoleOrder)[activeHoleIndex] ?? 0)
+                : 0;
               return (
                 <Card key={pid} className="flex items-center justify-between py-2.5">
                   <div>
@@ -1465,6 +1480,13 @@ export function NewRoundPage() {
                       Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
                     </p>
+                    {holeStrokes !== 0 && (
+                      <p className="text-[11px] font-medium text-green-700">
+                        {holeStrokes > 0
+                          ? `Gets ${holeStrokes} stroke${holeStrokes === 1 ? "" : "s"} here`
+                          : `Gives back ${-holeStrokes} here`}
+                      </p>
+                    )}
                     {!isTeam && (
                       <button
                         type="button"
