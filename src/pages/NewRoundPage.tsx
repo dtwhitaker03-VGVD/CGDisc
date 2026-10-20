@@ -11,6 +11,7 @@ import {
 import {
   courseHoleAverages,
   courseHoleHandicapOrder,
+  playerHoleStats,
   rankCourseHoleHandicaps,
 } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
@@ -211,6 +212,15 @@ export function NewRoundPage() {
     () => (course ? rankCourseHoleHandicaps(courseHoleAverages(course, rounds)) : []),
     [course, rounds],
   );
+
+  // Each player's own past results on every hole of this course, shown by
+  // their name while scoring.
+  const playerHoleStatsById = useMemo(() => {
+    const map: Record<string, ReturnType<typeof playerHoleStats>> = {};
+    if (!course) return map;
+    for (const pid of playerIds) map[pid] = playerHoleStats(pid, course, rounds);
+    return map;
+  }, [course, playerIds, rounds]);
 
   const handicapByPlayer = useMemo(() => {
     const map: Record<string, number | null> = {};
@@ -1463,18 +1473,25 @@ export function NewRoundPage() {
               const total = liveTotal(playerScores);
               const rel = liveRelToPar(playerScores);
               // Handicapped rounds: strokes this player gets (or gives back) on this hole.
+              const myHole = playerHoleStatsById[pid]?.[activeHoleIndex];
               const holeStrokes = isHandicapped
                 ? (allocateHandicapStrokes(allowances[pid] ?? 0, dynamicHoleOrder)[activeHoleIndex] ?? 0)
                 : 0;
               return (
                 <Card key={pid} className="flex items-center justify-between py-2.5">
                   <div>
-                    <p className="font-semibold text-slate-800 flex items-center gap-2">
+                    <p className="font-semibold text-slate-800 flex flex-wrap items-center gap-x-2">
                       <span
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: player.color }}
                       />
                       {player.name}
+                      {myHole?.average != null && (
+                        <span className="text-[11px] font-normal text-slate-500 tabular-nums">
+                          Avg {myHole.average} · Best {myHole.best} · Worst {myHole.worst} (
+                          {myHole.plays}×)
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-400">
                       Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
