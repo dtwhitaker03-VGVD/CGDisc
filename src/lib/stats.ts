@@ -513,3 +513,22 @@ export function playerParTypeStats(
       avgRelToPar: Math.round((sum / n - par) * 100) / 100,
     }));
 }
+
+export interface CourseDuration {
+  /** Mean round length in seconds. */
+  averageSeconds: number;
+  /** Rounds at the course that have a recorded time. */
+  rounds: number;
+}
+
+/** Average timed-round length at a course, or null when no round there has a time. */
+export function courseAverageDuration(courseId: string, rounds: Round[]): CourseDuration | null {
+  const times = rounds
+    .filter((r) => r.courseId === courseId && (r.durationSeconds ?? 0) > 0)
+    .map((r) => r.durationSeconds!);
+  if (times.length === 0) return null;
+  return {
+    averageSeconds: times.reduce((s, v) => s + v, 0) / times.length,
+    rounds: times.length,
+  };
+}

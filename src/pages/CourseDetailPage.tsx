@@ -3,11 +3,13 @@ import { useAppData } from "../store/AppDataContext";
 import { coursePar } from "../lib/ratings";
 import {
   computeScoreStats,
+  courseAverageDuration,
   courseHoleAverages,
   courseTopScores,
   courseTotalsByPlayer,
   rankCourseHoleHandicaps,
 } from "../lib/stats";
+import { formatDuration } from "../lib/duration";
 import { Button, Card, PageHeader } from "../components/ui";
 import type { Player } from "../types";
 
@@ -36,6 +38,7 @@ export function CourseDetailPage() {
   const holeHandicaps = rankCourseHoleHandicaps(courseHoleAverages(course, rounds));
 
   const totalsByPlayer = courseTotalsByPlayer(course.id, rounds);
+  const duration = courseAverageDuration(course.id, rounds);
   const overall = computeScoreStats([...totalsByPlayer.values()].flat());
 
   // The record and top 5 only count individually-scored rounds (not
@@ -142,6 +145,16 @@ export function CourseDetailPage() {
             <p className="text-center text-[11px] text-slate-400 mt-1">
               {overall.rounds} rounds logged
             </p>
+            {duration && (
+              <p className="text-center text-sm text-slate-600 mt-2">
+                Avg round time{" "}
+                <span className="font-semibold">{formatDuration(duration.averageSeconds)}</span>
+                <span className="text-[11px] text-slate-400">
+                  {" "}
+                  · {duration.rounds} timed {duration.rounds === 1 ? "round" : "rounds"}
+                </span>
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-slate-500">No rounds logged here yet.</p>
