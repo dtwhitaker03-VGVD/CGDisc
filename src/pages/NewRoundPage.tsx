@@ -8,7 +8,7 @@ import {
   playerDifferentials,
   totalScore,
 } from "../lib/ratings";
-import { courseHoleHandicapOrder } from "../lib/stats";
+import { courseHoleAverages, courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { RoundClock } from "../components/RoundClock";
@@ -201,6 +201,12 @@ export function NewRoundPage() {
   }, [players]);
 
   const course = useMemo(() => courses.find((c) => c.id === courseId) ?? null, [courses, courseId]);
+
+  // Past low / average / high per hole at this course, shown while scoring.
+  const holeStats = useMemo(
+    () => (course ? courseHoleAverages(course, rounds) : []),
+    [course, rounds],
+  );
 
   const handicapByPlayer = useMemo(() => {
     const map: Record<string, number | null> = {};
@@ -774,6 +780,7 @@ export function NewRoundPage() {
   if (!course) return null;
 
   const hole = course.holes[activeHoleIndex];
+  const activeHoleStat = holeStats[activeHoleIndex];
   const isFirstHole = activeHoleIndex === 0;
   const isLastHole = activeHoleIndex === course.holes.length - 1;
   const isHandicapped = roundMode === "handicapped";
@@ -1397,6 +1404,13 @@ export function NewRoundPage() {
             Par {hole.par}
             {hole.distanceFt ? ` · ${hole.distanceFt} ft` : ""}
           </p>
+          {activeHoleStat?.average != null && (
+            <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+              Low <span className="font-semibold text-green-600">{activeHoleStat.low}</span>
+              {" · "}Avg <span className="font-semibold text-slate-800">{activeHoleStat.average}</span>
+              {" · "}High <span className="font-semibold text-red-600">{activeHoleStat.high}</span>
+            </p>
+          )}
         </div>
         <p className="text-sm text-slate-400">
           {activeHoleIndex + 1} of {course.holes.length}

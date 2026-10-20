@@ -73,6 +73,9 @@ export interface HoleAverageStat {
   /** Average raw strokes across every recorded score on this hole, or
    * null if nobody's played it yet. */
   average: number | null;
+  /** Best and worst raw strokes recorded on this hole, null if unplayed. */
+  low: number | null;
+  high: number | null;
   entries: number;
 }
 
@@ -82,6 +85,8 @@ export interface HoleAverageStat {
 export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverageStat[] {
   const sums = new Array<number>(course.holes.length).fill(0);
   const counts = new Array<number>(course.holes.length).fill(0);
+  const lows = new Array<number>(course.holes.length).fill(Infinity);
+  const highs = new Array<number>(course.holes.length).fill(-Infinity);
   for (const round of rounds) {
     if (round.courseId !== course.id) continue;
     for (const playerId of round.playerIds) {
@@ -91,6 +96,8 @@ export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverage
         if (!Number.isFinite(s) || s <= 0 || i >= sums.length) return;
         sums[i] += s;
         counts[i] += 1;
+        if (s < lows[i]) lows[i] = s;
+        if (s > highs[i]) highs[i] = s;
       });
     }
   }
@@ -99,6 +106,8 @@ export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverage
     par: hole.par,
     distanceFt: hole.distanceFt,
     average: counts[i] > 0 ? Math.round((sums[i] / counts[i]) * 100) / 100 : null,
+    low: counts[i] > 0 ? lows[i] : null,
+    high: counts[i] > 0 ? highs[i] : null,
     entries: counts[i],
   }));
 }
