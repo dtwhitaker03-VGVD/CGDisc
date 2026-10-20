@@ -3,6 +3,7 @@ import { useAppData } from "../store/AppDataContext";
 import { useAuth } from "../store/AuthContext";
 import { scoreToPar, totalScore } from "../lib/ratings";
 import { roundTags } from "../lib/roundTags";
+import { formatDuration } from "../lib/duration";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 import { LegacyImportCard } from "../components/LegacyImportCard";
 import { IosInstallHint } from "../components/IosInstallHint";
@@ -89,7 +90,10 @@ export function HomePage() {
                   <Link to={`/round/${round.id}`} className="block py-3">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="font-semibold text-slate-900 text-sm">{course.name}</p>
-                      <p className="text-xs text-slate-400 shrink-0">{round.date}</p>
+                      <p className="text-xs text-slate-400 shrink-0">
+                        {round.date}
+                        {round.durationSeconds !== undefined && ` · ${formatDuration(round.durationSeconds)}`}
+                      </p>
                     </div>
                     <p className="text-[11px] text-slate-400">{roundTags(round)}</p>
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">

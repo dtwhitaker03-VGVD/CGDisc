@@ -74,7 +74,10 @@ create table if not exists public.rounds (
   -- stats, the saved scorecard), but the round is excluded from their
   -- handicap/rating and from course low/avg/high stats. Only straight and
   -- handicapped individual rounds support this (not team rounds).
-  dropped_players jsonb
+  dropped_players jsonb,
+  -- When scoring began and how long the round took (start -> finalize).
+  started_at timestamptz,
+  duration_seconds integer
 );
 
 alter table public.rounds
@@ -83,7 +86,9 @@ alter table public.rounds
   add column if not exists team_assignments jsonb,
   add column if not exists team_game_type text,
   add column if not exists scoring_method text,
-  add column if not exists dropped_players jsonb;
+  add column if not exists dropped_players jsonb,
+  add column if not exists started_at timestamptz,
+  add column if not exists duration_seconds integer;
 
 alter table public.rounds
   drop constraint if exists rounds_scoring_method_check;
