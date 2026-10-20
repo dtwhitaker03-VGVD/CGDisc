@@ -4,7 +4,8 @@ import { useAppData } from "../store/AppDataContext";
 import { allocateHandicapStrokes, coursePar, roundRating, scoreToPar, totalScore } from "../lib/ratings";
 import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
-import { Button, Card, PageHeader } from "../components/ui";
+import { formatDuration } from "../lib/duration";
+import { Button, Card, PageHeader, inputClass } from "../components/ui";
 
 export function RoundDetailPage() {
   const { id } = useParams();
@@ -207,7 +208,11 @@ export function RoundDetailPage() {
     <div>
       <PageHeader
         title={course.name}
-        subtitle={round.date}
+        subtitle={
+          round.durationSeconds !== undefined
+            ? `${round.date} · ${formatDuration(round.durationSeconds)}`
+            : round.date
+        }
         action={
           round.handicapped ? (
             <span className="text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2.5 py-1">
@@ -597,6 +602,32 @@ export function RoundDetailPage() {
           </tbody>
         </table>
       </Card>
+
+      {editing && (
+        <Card className="mb-4">
+          <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
+            Round time (minutes)
+            <input
+              key={round.durationSeconds ?? "none"}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="--"
+              defaultValue={
+                round.durationSeconds !== undefined ? Math.round(round.durationSeconds / 60) : ""
+              }
+              onBlur={(e) => {
+                const raw = e.target.value.trim();
+                if (raw === "") return;
+                const minutes = Math.max(0, Math.round(Number(raw)));
+                if (!Number.isFinite(minutes) || minutes * 60 === round.durationSeconds) return;
+                void updateRound(round.id, { durationSeconds: minutes * 60 });
+              }}
+              className={`${inputClass} w-24 text-right`}
+            />
+          </label>
+        </Card>
+      )}
 
       {editing ? (
         <div className="flex gap-2">

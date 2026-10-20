@@ -11,6 +11,7 @@ import {
 import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
+import { RoundClock } from "../components/RoundClock";
 import { Button, Card, EmptyState, LinkButton, PageHeader, inputClass } from "../components/ui";
 import type { Player } from "../types";
 
@@ -36,6 +37,8 @@ interface RoundDraft {
   teamGameType: "scramble" | "bestBall" | "teamTotal";
   scoringMethod: "strokes" | "holes";
   droppedPlayers: Record<string, number>;
+  /** ms epoch when scoring began; absent on drafts saved before the timer. */
+  startedAt?: number | null;
 }
 
 function loadDraft(): RoundDraft | null {
@@ -86,6 +89,8 @@ export function NewRoundPage() {
   // non-team rounds) -- maps playerId to how many holes they played
   // before leaving, so their score through that point still counts.
   const [droppedPlayers, setDroppedPlayers] = useState<Record<string, number>>({});
+  // When scoring began (players and match set); runs until the round is saved.
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -108,6 +113,7 @@ export function NewRoundPage() {
     setTeamGameType(pendingDraft.teamGameType ?? "bestBall");
     setScoringMethod(pendingDraft.scoringMethod ?? "strokes");
     setDroppedPlayers(pendingDraft.droppedPlayers ?? {});
+    setStartedAt(pendingDraft.startedAt ?? null);
     setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
     setPendingDraft(null);
   }
@@ -130,6 +136,7 @@ export function NewRoundPage() {
     setTeamGameType("bestBall");
     setScoringMethod("strokes");
     setDroppedPlayers({});
+    setStartedAt(null);
   }
 
   // Once the draft prompt (if any) is resolved, keep saving progress as the
@@ -149,6 +156,7 @@ export function NewRoundPage() {
       teamGameType,
       scoringMethod,
       droppedPlayers,
+      startedAt,
     });
   }, [
     pendingDraft,
@@ -164,6 +172,7 @@ export function NewRoundPage() {
     teamGameType,
     scoringMethod,
     droppedPlayers,
+    startedAt,
   ]);
 
   const preselectedSelf = useRef(false);
@@ -266,6 +275,7 @@ export function NewRoundPage() {
     setScores(initial);
     setActiveHoleIndex(0);
     setDroppedPlayers({});
+    setStartedAt(Date.now());
     setStep(3);
   }
 
@@ -331,6 +341,9 @@ export function NewRoundPage() {
         teamGameType: isTeam ? teamGameType : undefined,
         scoringMethod: handicapped ? undefined : scoringMethod,
         droppedPlayers: Object.keys(droppedPlayers).length > 0 ? droppedPlayers : undefined,
+        startedAt: startedAt !== null ? new Date(startedAt).toISOString() : undefined,
+        durationSeconds:
+          startedAt !== null ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : undefined,
       });
       clearDraft();
       navigate("/");
@@ -991,7 +1004,11 @@ export function NewRoundPage() {
   if (step === 4) {
     return (
       <div>
-        <PageHeader title="New round" subtitle={`Review · ${course.name}`} />
+        <PageHeader
+          title="New round"
+          subtitle={`Review · ${course.name}`}
+          action={startedAt !== null ? <RoundClock startedAt={startedAt} /> : undefined}
+        />
 
         {Object.keys(droppedPlayers).length > 0 && (
           <Card className="mb-3 bg-amber-50 border-amber-200">
@@ -1313,7 +1330,11 @@ export function NewRoundPage() {
 
   return (
     <div>
-      <PageHeader title="New round" subtitle={`Step 3 of 3 · ${course.name}`} />
+      <PageHeader
+        title="New round"
+        subtitle={`Step 3 of 3 · ${course.name}`}
+        action={startedAt !== null ? <RoundClock startedAt={startedAt} /> : undefined}
+      />
 
       <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-4 px-4">
         {course.holes.map((h, i) => (

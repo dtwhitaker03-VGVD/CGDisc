@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { scoreToPar, totalScore } from "../lib/ratings";
+import { formatDuration } from "../lib/duration";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 
 export function RoundsPage() {
@@ -27,7 +28,10 @@ export function RoundsPage() {
                 <Card>
                   <div className="flex items-center justify-between mb-1">
                     <p className="font-semibold text-slate-900">{course.name}</p>
-                    <p className="text-sm text-slate-400">{round.date}</p>
+                    <p className="text-sm text-slate-400">
+                      {round.date}
+                      {round.durationSeconds !== undefined && ` · ${formatDuration(round.durationSeconds)}`}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
                     {round.playerIds.map((pid) => {

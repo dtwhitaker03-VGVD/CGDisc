@@ -85,4 +85,8 @@ export interface Round {
    * handicapped individual rounds support this (not team rounds).
    */
   droppedPlayers?: Record<string, number>;
+  /** ISO timestamp of when the players and match were set and scoring began. */
+  startedAt?: string;
+  /** Seconds from startedAt to when the round was finalized. */
+  durationSeconds?: number;
 }
