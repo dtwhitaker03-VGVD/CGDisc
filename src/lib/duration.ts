@@ -14,3 +14,8 @@ export function formatDuration(totalSeconds: number): string {
   const m = mins % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
+
+/** Running time in ms, excluding paused stretches (`pausedAt` is set while paused now). */
+export function elapsedMs(startedAt: number, pausedAt: number | null, pausedMs: number, now: number) {
+  return Math.max(0, (pausedAt ?? now) - startedAt - pausedMs);
+}

@@ -12,6 +12,7 @@ import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { RoundClock } from "../components/RoundClock";
+import { elapsedMs } from "../lib/duration";
 import { Button, Card, EmptyState, LinkButton, PageHeader, inputClass } from "../components/ui";
 import type { Player } from "../types";
 
@@ -39,6 +40,10 @@ interface RoundDraft {
   droppedPlayers: Record<string, number>;
   /** ms epoch when scoring began; absent on drafts saved before the timer. */
   startedAt?: number | null;
+  /** ms epoch the timer was paused at, if it is paused right now. */
+  pausedAt?: number | null;
+  /** Total ms spent paused before the current pause. */
+  pausedMs?: number;
 }
 
 function loadDraft(): RoundDraft | null {
@@ -91,6 +96,8 @@ export function NewRoundPage() {
   const [droppedPlayers, setDroppedPlayers] = useState<Record<string, number>>({});
   // When scoring began (players and match set); runs until the round is saved.
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [pausedAt, setPausedAt] = useState<number | null>(null);
+  const [pausedMs, setPausedMs] = useState(0);
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -114,6 +121,8 @@ export function NewRoundPage() {
     setScoringMethod(pendingDraft.scoringMethod ?? "strokes");
     setDroppedPlayers(pendingDraft.droppedPlayers ?? {});
     setStartedAt(pendingDraft.startedAt ?? null);
+    setPausedAt(pendingDraft.pausedAt ?? null);
+    setPausedMs(pendingDraft.pausedMs ?? 0);
     setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
     setPendingDraft(null);
   }
@@ -137,6 +146,8 @@ export function NewRoundPage() {
     setScoringMethod("strokes");
     setDroppedPlayers({});
     setStartedAt(null);
+    setPausedAt(null);
+    setPausedMs(0);
   }
 
   // Once the draft prompt (if any) is resolved, keep saving progress as the
@@ -157,6 +168,8 @@ export function NewRoundPage() {
       scoringMethod,
       droppedPlayers,
       startedAt,
+      pausedAt,
+      pausedMs,
     });
   }, [
     pendingDraft,
@@ -173,6 +186,8 @@ export function NewRoundPage() {
     scoringMethod,
     droppedPlayers,
     startedAt,
+    pausedAt,
+    pausedMs,
   ]);
 
   const preselectedSelf = useRef(false);
@@ -276,6 +291,8 @@ export function NewRoundPage() {
     setActiveHoleIndex(0);
     setDroppedPlayers({});
     setStartedAt(Date.now());
+    setPausedAt(null);
+    setPausedMs(0);
     setStep(3);
   }
 
@@ -322,6 +339,25 @@ export function NewRoundPage() {
     });
   }
 
+  function toggleTimer() {
+    if (pausedAt === null) {
+      setPausedAt(Date.now());
+    } else {
+      setPausedMs((ms) => ms + Date.now() - pausedAt);
+      setPausedAt(null);
+    }
+  }
+
+  const clock =
+    startedAt !== null ? (
+      <RoundClock
+        startedAt={startedAt}
+        pausedAt={pausedAt}
+        pausedMs={pausedMs}
+        onToggle={toggleTimer}
+      />
+    ) : undefined;
+
   async function handleSave() {
     if (!course) return;
     setSaving(true);
@@ -343,7 +379,9 @@ export function NewRoundPage() {
         droppedPlayers: Object.keys(droppedPlayers).length > 0 ? droppedPlayers : undefined,
         startedAt: startedAt !== null ? new Date(startedAt).toISOString() : undefined,
         durationSeconds:
-          startedAt !== null ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : undefined,
+          startedAt !== null
+            ? Math.round(elapsedMs(startedAt, pausedAt, pausedMs, Date.now()) / 1000)
+            : undefined,
       });
       clearDraft();
       navigate("/");
@@ -1007,7 +1045,7 @@ export function NewRoundPage() {
         <PageHeader
           title="New round"
           subtitle={`Review · ${course.name}`}
-          action={startedAt !== null ? <RoundClock startedAt={startedAt} /> : undefined}
+          action={clock}
         />
 
         {Object.keys(droppedPlayers).length > 0 && (
@@ -1333,7 +1371,7 @@ export function NewRoundPage() {
       <PageHeader
         title="New round"
         subtitle={`Step 3 of 3 · ${course.name}`}
-        action={startedAt !== null ? <RoundClock startedAt={startedAt} /> : undefined}
+        action={clock}
       />
 
       <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-4 px-4">
