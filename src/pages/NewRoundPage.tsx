@@ -1425,9 +1425,18 @@ export function NewRoundPage() {
           </p>
           {activeHoleStat?.average != null && (
             <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
-              Low <span className="font-semibold text-green-600">{activeHoleStat.low}</span>
-              {" · "}Avg <span className="font-semibold text-slate-800">{activeHoleStat.average}</span>
-              {" · "}High <span className="font-semibold text-red-600">{activeHoleStat.high}</span>
+              Low{" "}
+              <span className={`font-semibold ${vsParClass(activeHoleStat.low!, hole.par)}`}>
+                {activeHoleStat.low}
+              </span>
+              {" · "}Avg{" "}
+              <span className={`font-semibold ${vsParClass(activeHoleStat.average, hole.par)}`}>
+                {activeHoleStat.average}
+              </span>
+              {" · "}High{" "}
+              <span className={`font-semibold ${vsParClass(activeHoleStat.high!, hole.par)}`}>
+                {activeHoleStat.high}
+              </span>
             </p>
           )}
           {activeHoleStat?.handicapRank != null && (
