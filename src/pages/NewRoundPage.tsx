@@ -1480,19 +1480,18 @@ export function NewRoundPage() {
               return (
                 <Card key={pid} className="flex items-center justify-between py-2.5">
                   <div>
-                    <p className="font-semibold text-slate-800 flex flex-wrap items-center gap-x-2">
+                    <p className="font-semibold text-slate-800 flex items-center gap-2">
                       <span
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: player.color }}
                       />
                       {player.name}
-                      {myHole?.average != null && (
-                        <span className="text-[11px] font-normal text-slate-500 tabular-nums">
-                          Avg {myHole.average} · Best {myHole.best} · Worst {myHole.worst} (
-                          {myHole.plays}×)
-                        </span>
-                      )}
                     </p>
+                    {myHole?.average != null && (
+                      <p className="text-[11px] text-slate-500 tabular-nums">
+                        Avg {myHole.average} · Best {myHole.best} · Worst {myHole.worst} ({myHole.plays}×)
+                      </p>
+                    )}
                     <p className="text-xs text-slate-400">
                       Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
