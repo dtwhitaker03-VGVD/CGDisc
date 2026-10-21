@@ -51,6 +51,11 @@ interface RoundDraft {
   pausedMs?: number;
 }
 
+/** Under par green, par black, over par red. */
+function vsParClass(value: number, par: number): string {
+  return value < par ? "text-green-600" : value > par ? "text-red-600" : "text-slate-900";
+}
+
 function loadDraft(): RoundDraft | null {
   try {
     const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -1489,7 +1494,19 @@ export function NewRoundPage() {
                     </p>
                     {myHole?.average != null && (
                       <p className="text-[11px] text-slate-500 tabular-nums">
-                        Avg {myHole.average} · Best {myHole.best} · Worst {myHole.worst} ({myHole.plays}×)
+                        Avg{" "}
+                        <span className={`font-semibold ${vsParClass(myHole.average, hole.par)}`}>
+                          {myHole.average}
+                        </span>
+                        {" · "}Best{" "}
+                        <span className={`font-semibold ${vsParClass(myHole.best!, hole.par)}`}>
+                          {myHole.best}
+                        </span>
+                        {" · "}Worst{" "}
+                        <span className={`font-semibold ${vsParClass(myHole.worst!, hole.par)}`}>
+                          {myHole.worst}
+                        </span>{" "}
+                        ({myHole.plays}×)
                       </p>
                     )}
                     <p className="text-xs text-slate-400">
