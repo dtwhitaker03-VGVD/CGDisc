@@ -1,5 +1,6 @@
 import type { Course, Round } from "../types";
 import { scoreToPar, totalScore } from "./ratings";
+import { courseForRound } from "./roundCourse";
 
 export interface ScoreStats {
   rounds: number;
@@ -225,7 +226,7 @@ export function playerHoleCounts(
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!course || validRoundTotal(strokes) === null) continue;
-    accumulateHoleCounts(strokes!, course.holes, counts);
+    accumulateHoleCounts(strokes!, courseForRound(course, round).holes, counts);
   }
   return counts;
 }
@@ -242,7 +243,7 @@ export function playerHoleCountsByCourse(
     const course = coursesById.get(round.courseId);
     if (!course || validRoundTotal(strokes) === null) continue;
     const counts = byCourse.get(round.courseId) ?? emptyHoleCounts();
-    accumulateHoleCounts(strokes!, course.holes, counts);
+    accumulateHoleCounts(strokes!, courseForRound(course, round).holes, counts);
     byCourse.set(round.courseId, counts);
   }
   return byCourse;
@@ -303,7 +304,7 @@ export function playerCourseRelToPar(
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!course || validRoundTotal(strokes) === null) continue;
-    const rel = scoreToPar(strokes!, course, round.droppedPlayers?.[playerId]);
+    const rel = scoreToPar(strokes!, courseForRound(course, round), round.droppedPlayers?.[playerId]);
     const entry = byCourse.get(round.courseId) ?? { sum: 0, count: 0 };
     entry.sum += rel;
     entry.count += 1;
@@ -352,9 +353,10 @@ function aggregatePlayerHoles(
     const strokes = round.scores[playerId];
     const course = coursesById.get(round.courseId);
     if (!course || !strokes) continue;
+    const played = courseForRound(course, round);
     strokes.forEach((s, i) => {
       if (!Number.isFinite(s) || s <= 0) return;
-      const hole = course.holes[i];
+      const hole = played.holes[i];
       if (!hole) return;
       const key = `${round.courseId}#${i}`;
       const entry = byHole.get(key) ?? { courseId: round.courseId, holeIndex: i, sum: 0, count: 0 };
@@ -457,15 +459,17 @@ export interface PlayerHoleStat {
  * played before leaving a round early.
  */
 export function playerHoleStats(playerId: string, course: Course, rounds: Round[]): PlayerHoleStat[] {
-  const acc = course.holes.map(() => ({ sum: 0, n: 0, best: Infinity, worst: 0 }));
+  const acc = course.holes.map(() => ({ sum: 0, rel: 0, n: 0, best: Infinity, worst: 0 }));
   for (const round of rounds) {
     if (round.courseId !== course.id) continue;
     const strokes = round.scores[playerId];
     if (!strokes) continue;
+    const played = courseForRound(course, round);
     strokes.forEach((s, i) => {
       if (!Number.isFinite(s) || s <= 0 || i >= acc.length) return;
       const a = acc[i];
       a.sum += s;
+      a.rel += s - played.holes[i].par;
       a.n += 1;
       a.best = Math.min(a.best, s);
       a.worst = Math.max(a.worst, s);
@@ -480,7 +484,7 @@ export function playerHoleStats(playerId: string, course: Course, rounds: Round[
       average: a.n ? Math.round((a.sum / a.n) * 10) / 10 : null,
       best: a.n ? a.best : null,
       worst: a.n ? a.worst : null,
-      avgRelToPar: a.n ? Math.round((a.sum / a.n - h.par) * 10) / 10 : null,
+      avgRelToPar: a.n ? Math.round((a.rel / a.n) * 10) / 10 : null,
     };
   });
 }
@@ -504,8 +508,9 @@ export function playerParTypeStats(
     const course = coursesById.get(round.courseId);
     const strokes = round.scores[playerId];
     if (!course || !strokes) continue;
+    const played = courseForRound(course, round);
     strokes.forEach((s, i) => {
-      const hole = course.holes[i];
+      const hole = played.holes[i];
       if (!hole || !Number.isFinite(s) || s <= 0) return;
       const a = acc.get(hole.par) ?? { sum: 0, n: 0 };
       a.sum += s;

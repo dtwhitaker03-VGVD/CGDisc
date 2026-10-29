@@ -56,6 +56,7 @@ interface RoundRow {
   dropped_players: Record<string, number> | null;
   started_at: string | null;
   duration_seconds: number | null;
+  par_overrides: Record<string, number> | null;
 }
 
 interface RoundScoreRow {
@@ -113,6 +114,7 @@ function mapRounds(roundRows: RoundRow[], scoreRows: RoundScoreRow[]): Round[] {
       droppedPlayers: r.dropped_players ?? undefined,
       startedAt: r.started_at ?? undefined,
       durationSeconds: r.duration_seconds ?? undefined,
+      parOverrides: r.par_overrides ?? undefined,
     };
   });
 }
@@ -267,6 +269,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           dropped_players: input.droppedPlayers ?? null,
           started_at: input.startedAt ?? null,
           duration_seconds: input.durationSeconds ?? null,
+          par_overrides: input.parOverrides ?? null,
         })
         .select()
         .single();
@@ -297,6 +300,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         droppedPlayers: input.droppedPlayers,
         startedAt: input.startedAt,
         durationSeconds: input.durationSeconds,
+        parOverrides: input.parOverrides,
       };
     };
 
@@ -325,6 +329,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (patch.durationSeconds !== undefined) {
         dbPatch.duration_seconds = patch.durationSeconds ?? null;
       }
+      if (patch.parOverrides !== undefined) dbPatch.par_overrides = patch.parOverrides ?? null;
       if (Object.keys(dbPatch).length > 0) {
         const { error } = await supabase.from("rounds").update(dbPatch).eq("id", id);
         if (error) throw new Error(error.message);

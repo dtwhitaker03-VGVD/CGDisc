@@ -77,7 +77,9 @@ create table if not exists public.rounds (
   dropped_players jsonb,
   -- When scoring began and how long the round took (start -> finalize).
   started_at timestamptz,
-  duration_seconds integer
+  duration_seconds integer,
+  -- hole number -> par for just this round (baskets moved for the day).
+  par_overrides jsonb
 );
 
 alter table public.rounds
@@ -88,7 +90,8 @@ alter table public.rounds
   add column if not exists scoring_method text,
   add column if not exists dropped_players jsonb,
   add column if not exists started_at timestamptz,
-  add column if not exists duration_seconds integer;
+  add column if not exists duration_seconds integer,
+  add column if not exists par_overrides jsonb;
 
 alter table public.rounds
   drop constraint if exists rounds_scoring_method_check;

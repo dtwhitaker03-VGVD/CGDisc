@@ -6,6 +6,7 @@ import {
   playerDifferentials,
   totalScore,
 } from "./ratings";
+import { courseForRound } from "./roundCourse";
 import { courseHoleHandicapOrder, isIndividuallyScored } from "./stats";
 
 export interface Record3 {
@@ -163,7 +164,7 @@ export function playerNetStats(
     n += 1;
     netSum += net;
     grossSum += gross;
-    if (net < coursePar(course)) beat += 1;
+    if (net < coursePar(courseForRound(course, round))) beat += 1;
     if (!best || net < best.net) best = { net, round };
   }
   if (!best) return null;
