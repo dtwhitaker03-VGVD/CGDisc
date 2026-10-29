@@ -1,4 +1,5 @@
 import type { Course, Round } from "../types";
+import { courseForRound } from "./roundCourse";
 
 export const DEFAULT_POINTS_PER_THROW = 10;
 
@@ -138,9 +139,10 @@ export function playerDifferentials(
     // than skew the handicap with a short, lower total.
     if (round.droppedPlayers?.[playerId] !== undefined) continue;
     const strokes = round.scores[playerId];
-    const course = coursesById.get(round.courseId);
-    if (!strokes || !course || strokes.length === 0) continue;
+    const baseCourse = coursesById.get(round.courseId);
+    if (!strokes || !baseCourse || strokes.length === 0) continue;
     if (strokes.some((s) => !Number.isFinite(s) || s <= 0)) continue;
+    const course = courseForRound(baseCourse, round);
     out.push({
       roundId: round.id,
       date: round.date,

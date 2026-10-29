@@ -85,6 +85,12 @@ export interface Round {
    * handicapped individual rounds support this (not team rounds).
    */
   droppedPlayers?: Record<string, number>;
+  /**
+   * Hole number -> par for just this round, when the baskets were moved
+   * (or a hole otherwise played to a different par) for the day. Holes not
+   * listed use the course's par. The course itself is left unchanged.
+   */
+  parOverrides?: Record<string, number>;
   /** ISO timestamp of when the players and match were set and scoring began. */
   startedAt?: string;
   /** Seconds from startedAt to when the round was finalized. */

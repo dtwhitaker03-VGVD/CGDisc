@@ -4,6 +4,7 @@ import { useAuth } from "../store/AuthContext";
 import { scoreToPar, totalScore } from "../lib/ratings";
 import { roundTags } from "../lib/roundTags";
 import { formatDuration } from "../lib/duration";
+import { courseForRound } from "../lib/roundCourse";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 import { LegacyImportCard } from "../components/LegacyImportCard";
 import { IosInstallHint } from "../components/IosInstallHint";
@@ -68,7 +69,7 @@ export function HomePage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {recentRounds.map((round) => {
-              const course = coursesById.get(round.courseId)!;
+              const course = courseForRound(coursesById.get(round.courseId)!, round);
               const results = round.playerIds
                 .map((pid) => {
                   const player = playersById.get(pid);

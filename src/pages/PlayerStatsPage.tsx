@@ -24,6 +24,7 @@ import {
   type HoleRelStat,
 } from "../lib/stats";
 import { roundTags } from "../lib/roundTags";
+import { courseForRound } from "../lib/roundCourse";
 import { headToHeadRecords, playerNetStats, type Record3 } from "../lib/headToHead";
 import { RatingChart } from "../components/RatingChart";
 import { Card, PageHeader } from "../components/ui";
@@ -177,7 +178,7 @@ export function PlayerStatsPage() {
     .filter((r) => !r.teamAssignments && r.droppedPlayers?.[player.id] === undefined)
     .map((r) => ({
       date: r.date,
-      rating: roundRating(r.scores[player.id], coursesById.get(r.courseId)!),
+      rating: roundRating(r.scores[player.id], courseForRound(coursesById.get(r.courseId)!, r)),
     }));
 
   // Best course: lowest average relative to par, ties to whoever has more rounds there, then by name.
@@ -483,7 +484,7 @@ export function PlayerStatsPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {playerRounds.map((r) => {
-              const course = coursesById.get(r.courseId)!;
+              const course = courseForRound(coursesById.get(r.courseId)!, r);
               const strokes = r.scores[player.id];
               const left = r.droppedPlayers?.[player.id];
               const rel = scoreToPar(strokes, course, left);

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { scoreToPar, totalScore } from "../lib/ratings";
 import { formatDuration } from "../lib/duration";
+import { courseForRound } from "../lib/roundCourse";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
 
 export function RoundsPage() {
@@ -21,8 +22,9 @@ export function RoundsPage() {
       ) : (
         <div className="space-y-3">
           {sorted.map((round) => {
-            const course = coursesById.get(round.courseId);
-            if (!course) return null;
+            const baseCourse = coursesById.get(round.courseId);
+            if (!baseCourse) return null;
+            const course = courseForRound(baseCourse, round);
             return (
               <Link key={round.id} to={`/round/${round.id}`} className="block">
                 <Card>

@@ -5,6 +5,7 @@ import { allocateHandicapStrokes, coursePar, roundRating, scoreToPar, totalScore
 import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { formatDuration } from "../lib/duration";
+import { courseForRound } from "../lib/roundCourse";
 import { Button, Card, PageHeader, inputClass } from "../components/ui";
 
 export function RoundDetailPage() {
@@ -13,7 +14,9 @@ export function RoundDetailPage() {
   const { rounds, coursesById, playersById, updateRound, deleteRound } = useAppData();
 
   const round = useMemo(() => rounds.find((r) => r.id === id), [rounds, id]);
-  const course = round ? coursesById.get(round.courseId) : undefined;
+  const baseCourse = round ? coursesById.get(round.courseId) : undefined;
+  // The course as played this round (per-round par overrides applied).
+  const course = round && baseCourse ? courseForRound(baseCourse, round) : baseCourse;
 
   // Rounds are locked by default once finalized -- "Edit round" opts back
   // into the editable scorecard below so scores aren't changed by a stray tap.

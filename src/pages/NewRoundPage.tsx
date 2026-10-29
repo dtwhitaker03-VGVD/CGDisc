@@ -17,6 +17,7 @@ import {
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { ScoreStepper } from "../components/ScoreStepper";
 import { RoundClock } from "../components/RoundClock";
+import { courseForRound } from "../lib/roundCourse";
 import { elapsedMs } from "../lib/duration";
 import { Button, Card, EmptyState, LinkButton, PageHeader, inputClass } from "../components/ui";
 import type { Player } from "../types";
@@ -49,6 +50,8 @@ interface RoundDraft {
   pausedAt?: number | null;
   /** Total ms spent paused before the current pause. */
   pausedMs?: number;
+  /** Hole number -> par for this round only (baskets moved for the day). */
+  parOverrides?: Record<string, number>;
 }
 
 /** Under par green, par black, over par red. */
@@ -108,6 +111,9 @@ export function NewRoundPage() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [pausedMs, setPausedMs] = useState(0);
+  // Hole number -> par for just this round, when baskets were moved for the day.
+  const [parOverrides, setParOverrides] = useState<Record<string, number>>({});
+  const [editingPar, setEditingPar] = useState(false);
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -133,6 +139,7 @@ export function NewRoundPage() {
     setStartedAt(pendingDraft.startedAt ?? null);
     setPausedAt(pendingDraft.pausedAt ?? null);
     setPausedMs(pendingDraft.pausedMs ?? 0);
+    setParOverrides(pendingDraft.parOverrides ?? {});
     setStep(validPlayerIds.length > 0 ? pendingDraft.step : 2);
     setPendingDraft(null);
   }
@@ -158,6 +165,8 @@ export function NewRoundPage() {
     setStartedAt(null);
     setPausedAt(null);
     setPausedMs(0);
+    setParOverrides({});
+    setEditingPar(false);
   }
 
   // Once the draft prompt (if any) is resolved, keep saving progress as the
@@ -180,6 +189,7 @@ export function NewRoundPage() {
       startedAt,
       pausedAt,
       pausedMs,
+      parOverrides,
     });
   }, [
     pendingDraft,
@@ -198,6 +208,7 @@ export function NewRoundPage() {
     startedAt,
     pausedAt,
     pausedMs,
+    parOverrides,
   ]);
 
   const preselectedSelf = useRef(false);
@@ -210,22 +221,30 @@ export function NewRoundPage() {
     }
   }, [players]);
 
-  const course = useMemo(() => courses.find((c) => c.id === courseId) ?? null, [courses, courseId]);
+  const baseCourse = useMemo(
+    () => courses.find((c) => c.id === courseId) ?? null,
+    [courses, courseId],
+  );
+  // The course as being played this round, with any per-round par overrides applied.
+  const course = useMemo(
+    () => (baseCourse ? courseForRound(baseCourse, { parOverrides }) : null),
+    [baseCourse, parOverrides],
+  );
 
   // Past low / average / high per hole at this course, shown while scoring.
   const holeStats = useMemo(
-    () => (course ? rankCourseHoleHandicaps(courseHoleAverages(course, rounds)) : []),
-    [course, rounds],
+    () => (baseCourse ? rankCourseHoleHandicaps(courseHoleAverages(baseCourse, rounds)) : []),
+    [baseCourse, rounds],
   );
 
   // Each player's own past results on every hole of this course, shown by
   // their name while scoring.
   const playerHoleStatsById = useMemo(() => {
     const map: Record<string, ReturnType<typeof playerHoleStats>> = {};
-    if (!course) return map;
-    for (const pid of playerIds) map[pid] = playerHoleStats(pid, course, rounds);
+    if (!baseCourse) return map;
+    for (const pid of playerIds) map[pid] = playerHoleStats(pid, baseCourse, rounds);
     return map;
-  }, [course, playerIds, rounds]);
+  }, [baseCourse, playerIds, rounds]);
 
   const handicapByPlayer = useMemo(() => {
     const map: Record<string, number | null> = {};
@@ -315,10 +334,39 @@ export function NewRoundPage() {
     setScores(initial);
     setActiveHoleIndex(0);
     setDroppedPlayers({});
+    setParOverrides({});
+    setEditingPar(false);
     setStartedAt(Date.now());
     setPausedAt(null);
     setPausedMs(0);
     setStep(3);
+  }
+
+  // Change the par of one hole for this round only (the course is untouched).
+  // Scores on this hole and later ones that still sit at the old par (the
+  // untouched default) follow the new par; earlier holes are left alone.
+  function setHolePar(holeIndex: number, newPar: number) {
+    if (!course || !baseCourse) return;
+    const holeNumber = course.holes[holeIndex].number;
+    const oldPar = course.holes[holeIndex].par;
+    if (newPar === oldPar) return;
+    const coursePar = baseCourse.holes[holeIndex].par;
+    setParOverrides((prev) => {
+      const next = { ...prev };
+      if (newPar === coursePar) delete next[String(holeNumber)];
+      else next[String(holeNumber)] = newPar;
+      return next;
+    });
+    if (holeIndex >= activeHoleIndex) {
+      setScores((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).map(([pid, arr]) => [
+            pid,
+            arr.map((s, i) => (i === holeIndex && s === oldPar ? newPar : s)),
+          ]),
+        ),
+      );
+    }
   }
 
   function setHoleScore(playerId: string, holeIndex: number, value: number) {
@@ -402,6 +450,7 @@ export function NewRoundPage() {
         teamGameType: isTeam ? teamGameType : undefined,
         scoringMethod: handicapped ? undefined : scoringMethod,
         droppedPlayers: Object.keys(droppedPlayers).length > 0 ? droppedPlayers : undefined,
+        parOverrides: Object.keys(parOverrides).length > 0 ? parOverrides : undefined,
         startedAt: startedAt !== null ? new Date(startedAt).toISOString() : undefined,
         durationSeconds:
           startedAt !== null
@@ -1422,7 +1471,36 @@ export function NewRoundPage() {
           <p className="text-sm text-slate-400">
             Par {hole.par}
             {hole.distanceFt ? ` · ${hole.distanceFt} ft` : ""}
+            {" · "}
+            <button
+              type="button"
+              className="font-medium text-green-700"
+              onClick={() => setEditingPar((v) => !v)}
+            >
+              {editingPar ? "Done" : "Change par"}
+            </button>
           </p>
+          {baseCourse && baseCourse.holes[activeHoleIndex].par !== hole.par && (
+            <p className="text-xs font-medium text-amber-600">
+              Par changed for this round (course par {baseCourse.holes[activeHoleIndex].par})
+            </p>
+          )}
+          {editingPar && (
+            <div className="flex gap-1.5 mt-1.5 mb-0.5">
+              {[2, 3, 4, 5, 6].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setHolePar(activeHoleIndex, p)}
+                  className={`w-9 h-9 rounded-full text-sm font-semibold ${
+                    p === hole.par ? "bg-green-700 text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
           {activeHoleStat?.average != null && (
             <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
               Low{" "}
