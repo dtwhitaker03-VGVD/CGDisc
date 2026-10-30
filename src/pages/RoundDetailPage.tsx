@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { allocateHandicapStrokes, coursePar, roundRating, scoreToPar, totalScore } from "../lib/ratings";
@@ -6,6 +6,7 @@ import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { formatDuration } from "../lib/duration";
 import { courseForRound } from "../lib/roundCourse";
+import { ScoreStepper } from "../components/ScoreStepper";
 import { Button, Card, PageHeader, inputClass } from "../components/ui";
 
 export function RoundDetailPage() {
@@ -22,11 +23,37 @@ export function RoundDetailPage() {
   // into the editable scorecard below so scores aren't changed by a stray tap.
   const [editing, setEditing] = useState(false);
 
-  // Edited locally first, committed on blur, so typing doesn't fight the
-  // network round-trip / realtime refresh on every keystroke.
+  // Edited locally first and saved after a short pause, so taps don't fight the
+  // network round-trip / realtime refresh on every change.
   const [draftScores, setDraftScores] = useState(round?.scores ?? {});
+  // Which hole the hole-by-hole editor is showing.
+  const [editHole, setEditHole] = useState(0);
+  // Latest draft for the debounced save, and the players whose edits haven't
+  // been saved yet (their draft wins over a refresh from the server).
+  const draftRef = useRef(draftScores);
+  const unsavedRef = useRef(new Set<string>());
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function flushEdits() {
+    clearTimeout(saveTimer.current);
+    if (!round || unsavedRef.current.size === 0) return;
+    const scores = Object.fromEntries(
+      [...unsavedRef.current].map((pid) => [pid, draftRef.current[pid]]),
+    );
+    unsavedRef.current.clear();
+    void updateRound(round.id, { scores });
+  }
+  const flushRef = useRef<() => void>(() => {});
   useEffect(() => {
-    if (round) setDraftScores(round.scores);
+    flushRef.current = flushEdits;
+  });
+  // Don't lose taps made just before navigating away.
+  useEffect(() => () => flushRef.current(), []);
+  useEffect(() => {
+    if (!round) return;
+    const next = { ...round.scores };
+    for (const pid of unsavedRef.current) next[pid] = draftRef.current[pid] ?? next[pid];
+    draftRef.current = next;
+    setDraftScores(next);
   }, [round]);
 
   if (!round || !course) {
@@ -185,18 +212,18 @@ export function RoundDetailPage() {
         pids: [pid],
       }));
 
-  function setDraftScore(playerId: string, holeIndex: number, value: number) {
-    setDraftScores((prev) => ({
-      ...prev,
-      [playerId]: prev[playerId].map((s, i) => (i === holeIndex ? Math.max(1, value) : s)),
-    }));
-  }
-
-  function commitScore(playerId: string) {
-    if (!round) return;
-    if (draftScores[playerId] !== round.scores[playerId]) {
-      void updateRound(round.id, { scores: { [playerId]: draftScores[playerId] } });
+  // Stepper taps update the draft right away and are saved together shortly
+  // after the last tap (or when leaving edit mode), instead of once per tap.
+  function setHoleScoreFor(pids: string[], holeIndex: number, value: number) {
+    const next = { ...draftRef.current };
+    for (const pid of pids) {
+      next[pid] = next[pid].map((s, i) => (i === holeIndex ? Math.max(1, value) : s));
+      unsavedRef.current.add(pid);
     }
+    draftRef.current = next;
+    setDraftScores(next);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => flushRef.current(), 800);
   }
 
   async function handleDelete() {
@@ -538,6 +565,96 @@ export function RoundDetailPage() {
             })}
       </div>
 
+      {editing && (
+        <div className="mb-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-4 px-4">
+            {course.holes.map((h, i) => (
+              <button
+                key={h.number}
+                type="button"
+                onClick={() => setEditHole(i)}
+                className={`shrink-0 w-9 h-9 rounded-full text-sm font-semibold ${
+                  i === editHole ? "bg-green-700 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {h.number}
+              </button>
+            ))}
+          </div>
+
+          <Card className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-lg text-slate-900">Hole {course.holes[editHole].number}</p>
+              <p className="text-sm text-slate-400">
+                Par {course.holes[editHole].par}
+                {course.holes[editHole].distanceFt
+                  ? ` · ${course.holes[editHole].distanceFt} ft`
+                  : ""}
+              </p>
+            </div>
+            <p className="text-sm text-slate-400">
+              {editHole + 1} of {course.holes.length}
+            </p>
+          </Card>
+
+          <div className="space-y-2 mb-3">
+            {scoreColumns.map((col) => {
+              const droppedAt = round.droppedPlayers?.[col.pids[0]];
+              const strokes = draftScores[col.pids[0]];
+              if (!strokes) return null;
+              const left = droppedAt !== undefined && editHole >= droppedAt;
+              const rel = scoreToPar(strokes, course, effectiveHolesFor(col.pids[0]));
+              const player = playersById.get(col.pids[0]);
+              return (
+                <Card key={col.key} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="font-semibold text-slate-800 flex items-center gap-2">
+                      {!isScramble && player && (
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: player.color }}
+                        />
+                      )}
+                      {col.label}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Total {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
+                    </p>
+                  </div>
+                  {left ? (
+                    <p className="text-xs text-amber-600">Left after hole {droppedAt}</p>
+                  ) : (
+                    <ScoreStepper
+                      value={strokes[editHole] ?? course.holes[editHole].par}
+                      par={course.holes[editHole].par}
+                      onChange={(v) => setHoleScoreFor(col.pids, editHole, v)}
+                    />
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              disabled={editHole === 0}
+              onClick={() => setEditHole(editHole - 1)}
+            >
+              Previous hole
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={editHole === course.holes.length - 1}
+              onClick={() => setEditHole(editHole + 1)}
+            >
+              Next hole
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card className="mb-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -557,8 +674,18 @@ export function RoundDetailPage() {
           </thead>
           <tbody>
             {course.holes.map((hole, i) => (
-              <tr key={hole.number} className="border-t border-slate-100">
-                <td className="py-1.5 sticky left-0 bg-white pr-2 whitespace-nowrap">
+              <tr
+                key={hole.number}
+                className={`border-t border-slate-100 ${
+                  editing && i === editHole ? "bg-green-50" : ""
+                } ${editing ? "cursor-pointer" : ""}`}
+                onClick={editing ? () => setEditHole(i) : undefined}
+              >
+                <td
+                  className={`py-1.5 sticky left-0 pr-2 whitespace-nowrap ${
+                    editing && i === editHole ? "bg-green-50" : "bg-white"
+                  }`}
+                >
                   {hole.number}{" "}
                   <span className="text-slate-400">
                     (par {hole.par}
@@ -579,22 +706,7 @@ export function RoundDetailPage() {
                       </td>
                     );
                   }
-                  return editing ? (
-                    <td key={col.key} className="px-1 py-1.5 text-center">
-                      <input
-                        type="number"
-                        className="w-12 rounded-lg border border-slate-200 text-center py-1"
-                        value={value}
-                        onChange={(e) => {
-                          const v = Number(e.target.value) || hole.par;
-                          for (const pid of col.pids) setDraftScore(pid, i, v);
-                        }}
-                        onBlur={() => {
-                          for (const pid of col.pids) commitScore(pid);
-                        }}
-                      />
-                    </td>
-                  ) : (
+                  return (
                     <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
                       {value}
                     </td>
@@ -634,7 +746,14 @@ export function RoundDetailPage() {
 
       {editing ? (
         <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={() => setEditing(false)}>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() => {
+              flushEdits();
+              setEditing(false);
+            }}
+          >
             Done editing
           </Button>
           <Button variant="danger" className="flex-1" onClick={handleDelete}>
