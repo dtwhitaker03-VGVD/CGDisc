@@ -80,8 +80,15 @@ function PlayerHoleTable({
   if (!course) return null;
   const stats = playerHoleStats(player.id, course, rounds);
   const rel = (v: number | null) => (v === null ? "—" : formatVsPar(v));
-  const relColor = (v: number | null) =>
-    v === null ? "" : v < 0 ? "text-green-600" : v > 0 ? "text-red-600" : "text-slate-700";
+  // Birdie (or better) green, par black, bogey (or worse) red.
+  const vsParColor = (score: number | null, par: number) =>
+    score === null
+      ? ""
+      : score < par
+        ? "text-green-600"
+        : score > par
+          ? "text-red-600"
+          : "text-slate-900";
   // 1 = best hole (lowest average vs par) .. N = worst; ties go to the hole with more plays, then lower number.
   const ranks = new Map<number, number>();
   stats
@@ -135,9 +142,16 @@ function PlayerHoleTable({
                 <td className="py-1 text-left font-medium">{h.holeNumber}</td>
                 <td>{h.par}</td>
                 <td className="font-semibold text-slate-900">{h.average ?? "—"}</td>
-                <td className={`font-semibold ${relColor(h.avgRelToPar)}`}>{rel(h.avgRelToPar)}</td>
-                <td className="text-green-600">{h.best ?? "—"}</td>
-                <td className="text-red-600">{h.worst ?? "—"}</td>
+                <td
+                  className={`font-semibold ${vsParColor(
+                    h.average === null ? null : Math.round(h.average),
+                    h.par,
+                  )}`}
+                >
+                  {rel(h.avgRelToPar)}
+                </td>
+                <td className={vsParColor(h.best, h.par)}>{h.best ?? "—"}</td>
+                <td className={vsParColor(h.worst, h.par)}>{h.worst ?? "—"}</td>
                 <td className="text-slate-400">{h.plays}</td>
                 <td className="font-semibold">{ranks.get(h.holeNumber) ?? "—"}</td>
               </tr>
