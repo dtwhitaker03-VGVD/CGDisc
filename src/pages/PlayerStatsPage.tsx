@@ -141,13 +141,10 @@ function PlayerHoleTable({
               <tr key={h.holeNumber} className="border-t border-slate-100">
                 <td className="py-1 text-left font-medium">{h.holeNumber}</td>
                 <td>{h.par}</td>
-                <td className="font-semibold text-slate-900">{h.average ?? "—"}</td>
-                <td
-                  className={`font-semibold ${vsParColor(
-                    h.average === null ? null : Math.round(h.average),
-                    h.par,
-                  )}`}
-                >
+                <td className={`font-semibold ${vsParColor(h.avgRelToPar, 0)}`}>
+                  {h.average ?? "—"}
+                </td>
+                <td className={`font-semibold ${vsParColor(h.avgRelToPar, 0)}`}>
                   {rel(h.avgRelToPar)}
                 </td>
                 <td className={vsParColor(h.best, h.par)}>{h.best ?? "—"}</td>
