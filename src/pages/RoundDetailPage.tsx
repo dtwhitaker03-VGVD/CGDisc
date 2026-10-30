@@ -26,8 +26,9 @@ export function RoundDetailPage() {
   // Edited locally first and saved after a short pause, so taps don't fight the
   // network round-trip / realtime refresh on every change.
   const [draftScores, setDraftScores] = useState(round?.scores ?? {});
-  // Which hole the hole-by-hole editor is showing.
+  // Which hole the hole-by-hole editor is showing (and whether its par picker is open).
   const [editHole, setEditHole] = useState(0);
+  const [editingPar, setEditingPar] = useState(false);
   // Latest draft for the debounced save, and the players whose edits haven't
   // been saved yet (their draft wins over a refresh from the server).
   const draftRef = useRef(draftScores);
@@ -224,6 +225,18 @@ export function RoundDetailPage() {
     setDraftScores(next);
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => flushRef.current(), 800);
+  }
+
+  // Change one hole's par for just this round (the course is untouched).
+  // Existing scores are left as they are.
+  function setHolePar(holeIndex: number, newPar: number) {
+    if (!round || !baseCourse) return;
+    const key = String(baseCourse.holes[holeIndex].number);
+    const next = { ...round.parOverrides };
+    if (newPar === baseCourse.holes[holeIndex].par) delete next[key];
+    else next[key] = newPar;
+    void updateRound(round.id, { parOverrides: next });
+    setEditingPar(false);
   }
 
   async function handleDelete() {
@@ -590,7 +603,38 @@ export function RoundDetailPage() {
                 {course.holes[editHole].distanceFt
                   ? ` · ${course.holes[editHole].distanceFt} ft`
                   : ""}
+                {" · "}
+                <button
+                  type="button"
+                  className="font-medium text-green-700"
+                  onClick={() => setEditingPar((v) => !v)}
+                >
+                  {editingPar ? "Cancel" : "Change par"}
+                </button>
               </p>
+              {baseCourse && baseCourse.holes[editHole].par !== course.holes[editHole].par && (
+                <p className="text-xs font-medium text-amber-600">
+                  Par changed for this round (course par {baseCourse.holes[editHole].par})
+                </p>
+              )}
+              {editingPar && (
+                <div className="flex gap-1.5 mt-1.5 mb-0.5">
+                  {[2, 3, 4, 5, 6].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setHolePar(editHole, p)}
+                      className={`w-9 h-9 rounded-full text-sm font-semibold ${
+                        p === course.holes[editHole].par
+                          ? "bg-green-700 text-white"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <p className="text-sm text-slate-400">
               {editHole + 1} of {course.holes.length}
