@@ -5,6 +5,8 @@ import {
   allocateHandicapStrokes,
   computeHandicap,
   computeHandicapAllowances,
+  joinedAtHole,
+  parOfScoredHoles,
   playerDifferentials,
   totalScore,
 } from "../lib/ratings";
@@ -114,6 +116,7 @@ export function NewRoundPage() {
   // Hole number -> par for just this round, when baskets were moved for the day.
   const [parOverrides, setParOverrides] = useState<Record<string, number>>({});
   const [editingPar, setEditingPar] = useState(false);
+  const [addingPlayer, setAddingPlayer] = useState(false);
 
   const [pendingDraft, setPendingDraft] = useState<RoundDraft | null>(() => {
     const draft = loadDraft();
@@ -323,6 +326,27 @@ export function NewRoundPage() {
     const player = await addPlayer(newFriendName.trim());
     setPlayerIds((prev) => [...prev, player.id]);
     setNewFriendName("");
+  }
+
+  // Add a player to a round already underway (straight rounds only). They
+  // start at the current hole; the holes before it are recorded as 0, i.e.
+  // not played (see joinedAtHole), so those rounds don't feed their handicap.
+  function joinRound(playerId: string) {
+    if (!course || playerIds.includes(playerId)) return;
+    setPlayerIds((prev) => [...prev, playerId]);
+    setScores((prev) => ({
+      ...prev,
+      [playerId]: course.holes.map((h, i) => (i < activeHoleIndex ? 0 : h.par)),
+    }));
+    setAddingPlayer(false);
+  }
+
+  async function handleJoinNewFriend() {
+    const name = newFriendName.trim();
+    if (!name) return;
+    const player = await addPlayer(name);
+    setNewFriendName("");
+    joinRound(player.id);
   }
 
   function goToScoring() {
@@ -878,7 +902,7 @@ export function NewRoundPage() {
     return parThrough(activeHoleIndex);
   }
   function liveRelToPar(strokes: number[] | undefined): number {
-    return liveTotal(strokes) - playedPar();
+    return liveTotal(strokes) - parOfScoredHoles(strokes ?? [], course!, activeHoleIndex);
   }
   // Once the round is finished, the review screen shows the real total --
   // every hole counts, not just the ones already moved past.
@@ -896,7 +920,10 @@ export function NewRoundPage() {
     return dropped === undefined ? holesCount : Math.min(dropped, holesCount);
   }
   function finalRelToPar(pid: string): number {
-    return finalTotal(scores[pid]) - parThrough(effectiveHolesCount(pid, course!.holes.length));
+    return (
+      finalTotal(scores[pid]) -
+      parOfScoredHoles(scores[pid] ?? [], course!, effectiveHolesCount(pid, course!.holes.length))
+    );
   }
 
   // Players who left the round early are excluded from the live scoring
@@ -1053,11 +1080,13 @@ export function NewRoundPage() {
   // ranked team leaderboard above for that.
   function playerScore(pid: string) {
     const gross = liveTotal(scores[pid]);
-    return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
+    // Relative to par (not raw strokes) so a player who joined late, with
+    // fewer holes played, isn't ranked ahead just for having a lower total.
+    return isHandicapped ? gross - (allowances[pid] ?? 0) : liveRelToPar(scores[pid]);
   }
   function finalPlayerScore(pid: string) {
     const gross = finalTotal(scores[pid]);
-    return isHandicapped ? gross - (allowances[pid] ?? 0) : gross;
+    return isHandicapped ? gross - (allowances[pid] ?? 0) : finalRelToPar(pid);
   }
   const sortedPlayerIds = isTeam
     ? [...playerIds].sort((a, b) => (teamOf[a] ?? 0) - (teamOf[b] ?? 0))
@@ -1081,8 +1110,8 @@ export function NewRoundPage() {
       order = [...order].sort((a, b) => {
         const sa = scores[a]?.[h];
         const sb = scores[b]?.[h];
-        const va = typeof sa === "number" ? sa : Infinity;
-        const vb = typeof sb === "number" ? sb : Infinity;
+        const va = typeof sa === "number" && sa > 0 ? sa : Infinity;
+        const vb = typeof sb === "number" && sb > 0 ? sb : Infinity;
         return va - vb;
       });
     }
@@ -1257,6 +1286,11 @@ export function NewRoundPage() {
                           left h{droppedPlayers[pid]}
                         </span>
                       )}
+                      {joinedAtHole(scores[pid]) !== undefined && (
+                        <span className="text-[10px] text-amber-600 font-normal">
+                          joined h{joinedAtHole(scores[pid])}
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold text-slate-900 tabular-nums">
                       {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
@@ -1395,7 +1429,9 @@ export function NewRoundPage() {
                     const leftBeforeThisHole = droppedAt !== undefined && i >= droppedAt;
                     return (
                       <td key={col.key} className="px-1 py-1.5 text-center tabular-nums">
-                        {col.pid && !leftBeforeThisHole ? scores[col.pid]?.[i] ?? h.par : "—"}
+                        {col.pid && !leftBeforeThisHole && (scores[col.pid]?.[i] ?? h.par) > 0
+                          ? scores[col.pid]?.[i] ?? h.par
+                          : "—"}
                       </td>
                     );
                   })}
@@ -1599,6 +1635,8 @@ export function NewRoundPage() {
                     <p className="text-xs text-slate-400">
                       Total {total} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                       {isTeam && ` · Team ${(teamOf[pid] ?? 0) + 1}`}
+                      {joinedAtHole(playerScores) !== undefined &&
+                        ` · joined h${joinedAtHole(playerScores)}`}
                     </p>
                     {holeStrokes !== 0 && (
                       <p className="text-[11px] font-medium text-green-700">
@@ -1617,15 +1655,84 @@ export function NewRoundPage() {
                       </button>
                     )}
                   </div>
-                  <ScoreStepper
-                    value={playerScores[activeHoleIndex] ?? hole.par}
-                    par={hole.par}
-                    onChange={(v) => setHoleScore(pid, activeHoleIndex, v)}
-                  />
+                  {(playerScores[activeHoleIndex] ?? hole.par) <= 0 ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setHoleScore(pid, activeHoleIndex, hole.par)}
+                    >
+                      Didn't play · add
+                    </Button>
+                  ) : (
+                    <ScoreStepper
+                      value={playerScores[activeHoleIndex] ?? hole.par}
+                      par={hole.par}
+                      onChange={(v) => setHoleScore(pid, activeHoleIndex, v)}
+                    />
+                  )}
                 </Card>
               );
             })}
       </div>
+
+      {roundMode === "straight" && (
+        <div className="mb-4">
+          {addingPlayer ? (
+            <Card>
+              <p className="text-sm font-medium text-slate-700 mb-2">
+                Add a player from hole {activeHoleIndex + 1}
+              </p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {players
+                  .filter((p) => !playerIds.includes(p.id))
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => joinRound(p.id)}
+                      className="rounded-full bg-slate-100 text-slate-800 text-sm font-medium px-3 py-1.5 active:bg-slate-200"
+                    >
+                      <span
+                        className="inline-block w-2 h-2 rounded-full mr-1.5"
+                        style={{ backgroundColor: p.color }}
+                      />
+                      {p.name}
+                    </button>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className={inputClass}
+                  placeholder="Or add a new friend by name"
+                  value={newFriendName}
+                  onChange={(e) => setNewFriendName(e.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={handleJoinNewFriend}
+                  disabled={!newFriendName.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                The holes before this one count as not played, so this round won't count toward
+                their handicap.
+              </p>
+              <button
+                type="button"
+                className="text-sm font-medium text-slate-500 mt-1"
+                onClick={() => setAddingPlayer(false)}
+              >
+                Cancel
+              </button>
+            </Card>
+          ) : (
+            <Button variant="secondary" className="w-full" onClick={() => setAddingPlayer(true)}>
+              + Add a player
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2">
         <Button

@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
-import { allocateHandicapStrokes, coursePar, roundRating, scoreToPar, totalScore } from "../lib/ratings";
+import {
+  allocateHandicapStrokes,
+  coursePar,
+  joinedAtHole,
+  roundRating,
+  scoreToPar,
+  totalScore,
+} from "../lib/ratings";
 import { courseHoleHandicapOrder } from "../lib/stats";
 import { computeHoleWins, teamPerHoleScores } from "../lib/matchplay";
 import { formatDuration } from "../lib/duration";
@@ -172,7 +179,7 @@ export function RoundDetailPage() {
             };
           })
           .filter((row): row is NonNullable<typeof row> => Boolean(row))
-          .sort((a, b) => a.total - b.total)
+          .sort((a, b) => a.rel - b.rel)
       : [];
 
   const teamHoleWinsMap =
@@ -416,6 +423,11 @@ export function RoundDetailPage() {
                       left h{round.droppedPlayers[row.pid]}
                     </span>
                   )}
+                  {joinedAtHole(draftScores[row.pid]) !== undefined && (
+                    <span className="text-[10px] text-amber-600 font-normal">
+                      joined h{joinedAtHole(draftScores[row.pid])}
+                    </span>
+                  )}
                 </span>
                 <span className="font-semibold text-slate-900 tabular-nums">
                   {row.total} ({row.rel === 0 ? "E" : row.rel > 0 ? `+${row.rel}` : row.rel})
@@ -568,6 +580,8 @@ export function RoundDetailPage() {
                   </p>
                   {droppedAt !== undefined ? (
                     <p className="text-xs text-amber-600">Left after hole {droppedAt}</p>
+                  ) : joinedAtHole(strokes) !== undefined ? (
+                    <p className="text-xs text-amber-600">Joined at hole {joinedAtHole(strokes)}</p>
                   ) : (
                     showsIndividualRating && (
                       <p className="text-xs text-slate-400">Rating {roundRating(strokes, course)}</p>
@@ -667,6 +681,15 @@ export function RoundDetailPage() {
                   </div>
                   {left ? (
                     <p className="text-xs text-amber-600">Left after hole {droppedAt}</p>
+                  ) : (strokes[editHole] ?? course.holes[editHole].par) <= 0 ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        setHoleScoreFor(col.pids, editHole, course.holes[editHole].par)
+                      }
+                    >
+                      Didn't play · add
+                    </Button>
                   ) : (
                     <ScoreStepper
                       value={strokes[editHole] ?? course.holes[editHole].par}
@@ -740,7 +763,7 @@ export function RoundDetailPage() {
                   const droppedAt = round.droppedPlayers?.[col.pids[0]];
                   const leftBeforeThisHole = droppedAt !== undefined && i >= droppedAt;
                   const value = draftScores[col.pids[0]]?.[i] ?? hole.par;
-                  if (leftBeforeThisHole) {
+                  if (leftBeforeThisHole || value <= 0) {
                     return (
                       <td
                         key={col.key}

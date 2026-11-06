@@ -102,6 +102,7 @@ export function headToHeadRecords(
       if (n !== course.holes.length) continue; // round totals need both to finish
       const ga = a.slice(0, n);
       const gb = b.slice(0, n);
+      if (ga.some((s) => !(s > 0)) || gb.some((s) => !(s > 0))) continue; // joined late
       row.rounds += 1;
       tally(row.straight, totalScore(ga), totalScore(gb));
       if (row.handicap && rA && rB) {

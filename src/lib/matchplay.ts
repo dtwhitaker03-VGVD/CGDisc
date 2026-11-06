@@ -22,7 +22,7 @@ export function computeHoleWins(
     let winners: string[] = [];
     for (const c of competitors) {
       const s = c.perHoleScores[h];
-      if (typeof s !== "number" || !Number.isFinite(s)) continue;
+      if (typeof s !== "number" || !Number.isFinite(s) || s <= 0) continue;
       if (s < lowest) {
         lowest = s;
         winners = [c.id];
