@@ -4,6 +4,7 @@ import { useAppData } from "../store/AppDataContext";
 import {
   coursePar,
   computeHandicap,
+  joinedAtHole,
   playerDifferentials,
   roundRating,
   scoreToPar,
@@ -186,7 +187,12 @@ export function PlayerStatsPage() {
 
   const chartPoints = [...playerRounds]
     .reverse()
-    .filter((r) => !r.teamAssignments && r.droppedPlayers?.[player.id] === undefined)
+    .filter(
+      (r) =>
+        !r.teamAssignments &&
+        r.droppedPlayers?.[player.id] === undefined &&
+        joinedAtHole(r.scores[player.id]) === undefined,
+    )
     .map((r) => ({
       date: r.date,
       rating: roundRating(r.scores[player.id], courseForRound(coursesById.get(r.courseId)!, r)),
@@ -513,7 +519,9 @@ export function PlayerStatsPage() {
                       <p className="text-[11px] text-slate-400">
                         {left !== undefined
                           ? `Left after hole ${left}`
-                          : r.teamAssignments
+                          : joinedAtHole(strokes) !== undefined
+                            ? `Joined at hole ${joinedAtHole(strokes)}`
+                            : r.teamAssignments
                             ? roundTags(r)
                             : `${roundTags(r)} · Rating ${roundRating(strokes, course)}`}
                       </p>

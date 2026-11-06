@@ -13,8 +13,34 @@ export function totalScore(strokes: number[]): number {
   return strokes.reduce((sum, s) => sum + (Number.isFinite(s) ? s : 0), 0);
 }
 
+/**
+ * Par for the holes a player actually scored: the first `holesCount` holes,
+ * skipping any recorded as 0 (a player who joined a round already underway
+ * has 0 on the holes before they joined -- see joinedAtHole).
+ */
+export function parOfScoredHoles(
+  strokes: number[],
+  course: Course,
+  holesCount: number = course.holes.length,
+): number {
+  return course.holes
+    .slice(0, holesCount)
+    .reduce((sum, h, i) => (strokes[i] !== undefined && strokes[i] <= 0 ? sum : sum + h.par), 0);
+}
+
 export function scoreToPar(strokes: number[], course: Course, holesCount?: number): number {
-  return totalScore(strokes) - coursePar(course, holesCount);
+  return totalScore(strokes) - parOfScoredHoles(strokes, course, holesCount);
+}
+
+/**
+ * The hole (1-based) a player joined at, for a player added to a round that
+ * was already underway: the holes before they joined are stored as 0 (not
+ * played). Undefined for a player who played from the first hole.
+ */
+export function joinedAtHole(strokes: number[] | undefined): number | undefined {
+  if (!strokes) return undefined;
+  const first = strokes.findIndex((s) => s > 0);
+  return first > 0 ? first + 1 : undefined;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
-import { scoreToPar, totalScore } from "../lib/ratings";
+import { joinedAtHole, scoreToPar, totalScore } from "../lib/ratings";
 import { formatDuration } from "../lib/duration";
 import { courseForRound } from "../lib/roundCourse";
 import { Card, EmptyState, LinkButton, PageHeader } from "../components/ui";
@@ -51,6 +51,9 @@ export function RoundsPage() {
                             {totalScore(strokes)} ({rel === 0 ? "E" : rel > 0 ? `+${rel}` : rel})
                             {droppedAt !== undefined && (
                               <span className="text-amber-600"> · left h{droppedAt}</span>
+                            )}
+                            {joinedAtHole(strokes) !== undefined && (
+                              <span className="text-amber-600"> · joined h{joinedAtHole(strokes)}</span>
                             )}
                           </span>
                         </span>

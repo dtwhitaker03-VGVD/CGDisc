@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAppData } from "../store/AppDataContext";
 import { useAuth } from "../store/AuthContext";
-import { scoreToPar, totalScore } from "../lib/ratings";
+import { joinedAtHole, scoreToPar, totalScore } from "../lib/ratings";
 import { roundTags } from "../lib/roundTags";
 import { formatDuration } from "../lib/duration";
 import { courseForRound } from "../lib/roundCourse";
@@ -81,6 +81,7 @@ export function HomePage() {
                     total: totalScore(strokes),
                     rel: scoreToPar(strokes, course, droppedAt),
                     droppedAt,
+                    joinedAt: joinedAtHole(strokes),
                   };
                 })
                 .filter((r): r is NonNullable<typeof r> => Boolean(r))
@@ -98,7 +99,7 @@ export function HomePage() {
                     </div>
                     <p className="text-[11px] text-slate-400">{roundTags(round)}</p>
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
-                      {shown.map(({ player, total, rel, droppedAt }) => (
+                      {shown.map(({ player, total, rel, droppedAt, joinedAt }) => (
                         <span key={player.id}>
                           <span className="font-medium" style={{ color: player.color }}>
                             {player.name}
@@ -108,6 +109,9 @@ export function HomePage() {
                           </span>
                           {droppedAt !== undefined && (
                             <span className="text-amber-600 text-xs"> · left h{droppedAt}</span>
+                          )}
+                          {joinedAt !== undefined && (
+                            <span className="text-amber-600 text-xs"> · joined h{joinedAt}</span>
                           )}
                         </span>
                       ))}
