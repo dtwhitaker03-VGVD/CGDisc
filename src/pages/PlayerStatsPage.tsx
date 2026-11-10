@@ -167,7 +167,7 @@ function PlayerHoleTable({
 
 export function PlayerStatsPage() {
   const { id } = useParams();
-  const { players, playersById, rounds, coursesById } = useAppData();
+  const { playersById } = useAppData();
   const player = id ? playersById.get(id) : undefined;
 
   if (!player) {
@@ -177,6 +177,13 @@ export function PlayerStatsPage() {
       </div>
     );
   }
+
+  return <PlayerStatsView player={player} />;
+}
+
+/** One player's stats; `embedded` drops the page header (used inside the Stats page). */
+export function PlayerStatsView({ player, embedded = false }: { player: Player; embedded?: boolean }) {
+  const { players, playersById, rounds, coursesById } = useAppData();
 
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
@@ -236,7 +243,7 @@ export function PlayerStatsPage() {
 
   return (
     <div>
-      <PageHeader title={player.name} subtitle={player.isSelf ? "You" : "Friend"} />
+      {!embedded && <PageHeader title={player.name} subtitle={player.isSelf ? "You" : "Friend"} />}
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <Card>
