@@ -3,6 +3,7 @@ import { useAppData } from "../store/AppDataContext";
 import { computeHandicap, coursePar, playerDifferentials } from "../lib/ratings";
 import { computeScoreStats, courseTotalsByPlayer } from "../lib/stats";
 import { Card, EmptyState, PageHeader } from "../components/ui";
+import { TeamStats } from "../components/TeamStats";
 
 export function StatsPage() {
   const { players, courses, rounds, coursesById } = useAppData();
@@ -44,6 +45,11 @@ export function StatsPage() {
           );
         })}
       </div>
+
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-6 mb-2">
+        Team stats
+      </h2>
+      <TeamStats />
 
       {courses.length > 0 && (
         <>
