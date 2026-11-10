@@ -11,7 +11,7 @@ import {
 } from "../lib/stats";
 import { formatDuration } from "../lib/duration";
 import { Button, Card, PageHeader } from "../components/ui";
-import type { Player } from "../types";
+import type { Course, Player } from "../types";
 
 function relToPar(total: number, par: number): string {
   const rel = total - par;
@@ -21,7 +21,7 @@ function relToPar(total: number, par: number): string {
 export function CourseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { courses, players, playersById, rounds, deleteCourse } = useAppData();
+  const { courses, deleteCourse } = useAppData();
   const course = courses.find((c) => c.id === id);
 
   if (!course) {
@@ -31,6 +31,28 @@ export function CourseDetailPage() {
       </div>
     );
   }
+
+  async function handleDelete() {
+    if (!course) return;
+    if (confirm(`Delete "${course.name}"? This also deletes any rounds played there.`)) {
+      await deleteCourse(course.id);
+      navigate("/courses");
+    }
+  }
+
+  return (
+    <div>
+      <CourseStatsView course={course} />
+      <Button variant="danger" className="w-full" onClick={handleDelete}>
+        Delete course
+      </Button>
+    </div>
+  );
+}
+
+/** A course's stats; `embedded` drops the page header (used inside the Stats page). */
+export function CourseStatsView({ course, embedded = false }: { course: Course; embedded?: boolean }) {
+  const { players, playersById, rounds } = useAppData();
 
   const par = coursePar(course);
   const hasAnyDistance = course.holes.some((h) => h.distanceFt);
@@ -61,17 +83,9 @@ export function CourseDetailPage() {
     .filter((row): row is { player: Player; stats: NonNullable<typeof overall> } => Boolean(row))
     .sort((a, b) => a.stats.average - b.stats.average);
 
-  async function handleDelete() {
-    if (!course) return;
-    if (confirm(`Delete "${course.name}"? This also deletes any rounds played there.`)) {
-      await deleteCourse(course.id);
-      navigate("/courses");
-    }
-  }
-
   return (
     <div>
-      <PageHeader title={course.name} subtitle={course.location} />
+      {!embedded && <PageHeader title={course.name} subtitle={course.location} />}
 
       <Card className="mb-4 overflow-x-auto">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
@@ -238,10 +252,6 @@ export function CourseDetailPage() {
           </ul>
         )}
       </Card>
-
-      <Button variant="danger" className="w-full" onClick={handleDelete}>
-        Delete course
-      </Button>
     </div>
   );
 }

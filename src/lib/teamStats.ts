@@ -191,3 +191,120 @@ export function teamRecords(matchups: Matchup[]): TeamRecord[] {
     return wq - wp || gq - gp;
   });
 }
+
+/** First word of a name: "David Whitaker" -> "David". */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** A team's label by first names, e.g. David and Shea -> "David Shea". */
+export function teamLabel(
+  playerIds: string[],
+  playersById: Map<string, { name: string }>,
+): string {
+  return playerIds.map((id) => firstName(playersById.get(id)?.name ?? "Someone")).join(" ");
+}
+
+/** One game from a single team's point of view. */
+export interface TeamGame {
+  roundId: string;
+  date: string;
+  createdAt: string;
+  courseId: string;
+  gameType: TeamGameType;
+  method: "strokes" | "holes";
+  mine: TeamResult;
+  theirs: TeamResult;
+  outcome: "win" | "loss" | "tie";
+}
+
+export interface TeamVsOpponent {
+  opponentKey: string;
+  opponentIds: string[];
+  wins: number;
+  losses: number;
+  ties: number;
+  /** Newest first. */
+  games: TeamGame[];
+}
+
+export interface TeamCourseStat {
+  courseId: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  games: number;
+  /** This team's best (lowest vs par) score at the course for each game type. */
+  best: Partial<Record<TeamGameType, { strokes: number; rel: number }>>;
+}
+
+export interface TeamView {
+  wins: number;
+  losses: number;
+  ties: number;
+  vs: TeamVsOpponent[];
+  byCourse: TeamCourseStat[];
+}
+
+/** Everything about one team: record, record per course, and record against each opponent. */
+export function teamView(teamKeyValue: string, matchups: Matchup[]): TeamView {
+  const vs: TeamVsOpponent[] = [];
+  const byCourse = new Map<string, TeamCourseStat>();
+  const view: TeamView = { wins: 0, losses: 0, ties: 0, vs, byCourse: [] };
+
+  for (const m of matchups) {
+    if (m.keyA !== teamKeyValue && m.keyB !== teamKeyValue) continue;
+    const iAmA = m.keyA === teamKeyValue;
+    const opp: TeamVsOpponent = {
+      opponentKey: iAmA ? m.keyB : m.keyA,
+      opponentIds: iAmA ? m.playerIdsB : m.playerIdsA,
+      wins: iAmA ? m.aWins : m.bWins,
+      losses: iAmA ? m.bWins : m.aWins,
+      ties: m.ties,
+      games: m.games.map((g) => {
+        const mine = iAmA ? g.a : g.b;
+        const theirs = iAmA ? g.b : g.a;
+        const outcome =
+          g.winner === "tie" ? "tie" : (g.winner === "a") === iAmA ? "win" : "loss";
+        return {
+          roundId: g.roundId,
+          date: g.date,
+          createdAt: g.createdAt,
+          courseId: g.courseId,
+          gameType: g.gameType,
+          method: g.method,
+          mine,
+          theirs,
+          outcome,
+        } satisfies TeamGame;
+      }),
+    };
+    vs.push(opp);
+    view.wins += opp.wins;
+    view.losses += opp.losses;
+    view.ties += opp.ties;
+
+    for (const g of opp.games) {
+      const c =
+        byCourse.get(g.courseId) ??
+        byCourse
+          .set(g.courseId, { courseId: g.courseId, wins: 0, losses: 0, ties: 0, games: 0, best: {} })
+          .get(g.courseId)!;
+      c.games += 1;
+      if (g.outcome === "win") c.wins += 1;
+      else if (g.outcome === "loss") c.losses += 1;
+      else c.ties += 1;
+      const best = c.best[g.gameType];
+      if (!best || g.mine.rel < best.rel) {
+        c.best[g.gameType] = { strokes: g.mine.strokes, rel: g.mine.rel };
+      }
+    }
+  }
+
+  view.byCourse = [...byCourse.values()];
+  // Most-played opponents first, then the most recently met.
+  view.vs.sort(
+    (p, q) => q.games.length - p.games.length || (p.games[0].date < q.games[0].date ? 1 : -1),
+  );
+  return view;
+}
