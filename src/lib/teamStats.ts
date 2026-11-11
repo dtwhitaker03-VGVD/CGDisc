@@ -110,6 +110,41 @@ export function teamResultsForRound(round: Round, course: Course): TeamResult[] 
   }));
 }
 
+/** A team's scores at one course in one kind of team game. */
+export interface TeamCourseScores {
+  key: string;
+  playerIds: string[];
+  gameType: TeamGameType;
+  /** One team score per finished round. */
+  strokes: number[];
+}
+
+/** Every team's scores at a course, grouped by team and game type (scores
+ * from different game types aren't comparable, so they're kept apart). */
+export function teamScoresAtCourse(
+  courseId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): TeamCourseScores[] {
+  const course = coursesById.get(courseId);
+  if (!course) return [];
+  const byKey = new Map<string, TeamCourseScores>();
+  for (const round of rounds) {
+    if (round.courseId !== courseId) continue;
+    const teams = teamResultsForRound(round, course);
+    if (!teams) continue;
+    const gameType: TeamGameType = round.teamGameType ?? "teamTotal";
+    for (const t of teams) {
+      const k = `${t.key}#${gameType}`;
+      const entry =
+        byKey.get(k) ?? { key: t.key, playerIds: t.playerIds, gameType, strokes: [] };
+      entry.strokes.push(t.strokes);
+      byKey.set(k, entry);
+    }
+  }
+  return [...byKey.values()];
+}
+
 /** Head-to-head history for every pair of teams that has played each other. */
 export function teamMatchups(rounds: Round[], coursesById: Map<string, Course>): Matchup[] {
   const byPair = new Map<string, Matchup>();
