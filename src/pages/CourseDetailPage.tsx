@@ -10,8 +10,11 @@ import {
   rankCourseHoleHandicaps,
 } from "../lib/stats";
 import { formatDuration } from "../lib/duration";
+import { teamLabel, teamScoresAtCourse } from "../lib/teamStats";
 import { Button, Card, PageHeader } from "../components/ui";
 import type { Course, Player } from "../types";
+
+const GAME_LABELS = { scramble: "Scramble", bestBall: "Best ball", teamTotal: "Team total" } as const;
 
 function relToPar(total: number, par: number): string {
   const rel = total - par;
@@ -52,7 +55,7 @@ export function CourseDetailPage() {
 
 /** A course's stats; `embedded` drops the page header (used inside the Stats page). */
 export function CourseStatsView({ course, embedded = false }: { course: Course; embedded?: boolean }) {
-  const { players, playersById, rounds } = useAppData();
+  const { players, playersById, rounds, courses } = useAppData();
 
   const par = coursePar(course);
   const hasAnyDistance = course.holes.some((h) => h.distanceFt);
@@ -63,8 +66,8 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
   const duration = courseAverageDuration(course.id, rounds);
   const overall = computeScoreStats([...totalsByPlayer.values()].flat());
 
-  // The record and top 5 only count individually-scored rounds (not
-  // scramble, where the whole team shares one score) -- see courseTopScores.
+  // Personal scores, the record and the top 5 only count individual rounds;
+  // team rounds get their own listing below -- see courseTopScores.
   const topScores = courseTopScores(course.id, rounds, 5);
   const recordEntry = topScores[0];
   const recordHolderNames = recordEntry
@@ -72,6 +75,15 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
         .map((pid) => playersById.get(pid)?.name)
         .filter((name): name is string => Boolean(name))
     : [];
+
+  const teamRows = teamScoresAtCourse(
+    course.id,
+    rounds,
+    new Map(courses.map((c) => [c.id, c])),
+  )
+    .map((t) => ({ team: t, stats: computeScoreStats(t.strokes) }))
+    .filter((r): r is { team: typeof r.team; stats: NonNullable<typeof r.stats> } => Boolean(r.stats))
+    .sort((a, b) => b.stats.rounds - a.stats.rounds || a.stats.average - b.stats.average);
 
   const playerRows = [...totalsByPlayer.entries()]
     .map(([playerId, totals]) => {
@@ -157,7 +169,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
               </p>
             )}
             <p className="text-center text-[11px] text-slate-400 mt-1">
-              {overall.rounds} rounds logged
+              {overall.rounds} individual rounds logged
             </p>
             {duration && (
               <p className="text-center text-sm text-slate-600 mt-2">
@@ -180,7 +192,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
           Top 5 scores
         </p>
         {topScores.length === 0 ? (
-          <p className="text-sm text-slate-500">No individually-scored rounds logged here yet.</p>
+          <p className="text-sm text-slate-500">No individual rounds logged here yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {topScores.map((entry, i) => {
@@ -217,10 +229,10 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
 
       <Card className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-          By player (low / avg / high)
+          By player · individual rounds (low / avg / high)
         </p>
         {playerRows.length === 0 ? (
-          <p className="text-sm text-slate-500">No rounds logged here yet.</p>
+          <p className="text-sm text-slate-500">No individual rounds logged here yet.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {playerRows.map(({ player, stats }) => (
@@ -247,6 +259,38 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
                     <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
                   </div>
                 </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Team rounds (low / avg / high)
+        </p>
+        {teamRows.length === 0 ? (
+          <p className="text-sm text-slate-500">No finished team rounds logged here yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {teamRows.map(({ team, stats }) => (
+              <li key={`${team.key}#${team.gameType}`} className="flex items-center justify-between py-2.5">
+                <div>
+                  <p className="font-medium text-slate-800 text-sm">
+                    {teamLabel(team.playerIds, playersById)}
+                  </p>
+                  <p className="text-[11px] text-slate-400">{GAME_LABELS[team.gameType]}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm tabular-nums">
+                    <span className="text-green-600 font-semibold">{stats.low}</span>
+                    {" / "}
+                    <span className="text-slate-900 font-semibold">{stats.average}</span>
+                    {" / "}
+                    <span className="text-red-600 font-semibold">{stats.high}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
+                </div>
               </li>
             ))}
           </ul>

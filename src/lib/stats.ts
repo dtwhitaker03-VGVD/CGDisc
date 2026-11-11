@@ -36,11 +36,13 @@ export function computeScoreStats(totals: number[]): ScoreStats | null {
   };
 }
 
-/** Every player's score totals at a course, grouped by player id. */
+/** Every player's score totals at a course, grouped by player id. Only
+ * individual rounds count -- team rounds are listed separately (see
+ * teamScoresAtCourse). */
 export function courseTotalsByPlayer(courseId: string, rounds: Round[]): Map<string, number[]> {
   const byPlayer = new Map<string, number[]>();
   for (const round of rounds) {
-    if (round.courseId !== courseId) continue;
+    if (round.courseId !== courseId || round.teamAssignments) continue;
     for (const playerId of round.playerIds) {
       if (round.droppedPlayers?.[playerId] !== undefined) continue;
       const total = validRoundTotal(round.scores[playerId]);
@@ -258,8 +260,8 @@ export interface CourseScoreEntry {
 
 /**
  * The best (lowest) individual round totals ever recorded at a course,
- * across every player, best first. Excludes scramble rounds (the whole
- * team shares one score, not a personal result) and rounds a player left
+ * across every player, best first. Excludes team rounds (listed on their
+ * own, by team) and rounds a player left
  * early (a partial round isn't a fair comparison against a full one).
  */
 export function courseTopScores(
@@ -269,7 +271,7 @@ export function courseTopScores(
 ): CourseScoreEntry[] {
   const entries: CourseScoreEntry[] = [];
   for (const round of rounds) {
-    if (round.courseId !== courseId || !isIndividuallyScored(round)) continue;
+    if (round.courseId !== courseId || round.teamAssignments) continue;
     for (const playerId of round.playerIds) {
       if (round.droppedPlayers?.[playerId] !== undefined) continue;
       const total = validRoundTotal(round.scores[playerId]);
