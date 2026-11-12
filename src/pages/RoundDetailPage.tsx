@@ -75,8 +75,30 @@ export function RoundDetailPage() {
   // A player who left early only played part of the course, so par
   // comparisons for them have to stop at the hole they left on instead of
   // the full round.
+  // (If scores have since been added past the hole they left on, the saved
+  // droppedPlayers value lags until the save comes back, so the draft's own
+  // length wins.)
   function effectiveHolesFor(pid: string): number {
-    return round!.droppedPlayers?.[pid] ?? course!.holes.length;
+    const droppedAt = round!.droppedPlayers?.[pid];
+    if (droppedAt === undefined) return course!.holes.length;
+    return Math.max(droppedAt, draftScores[pid]?.length ?? 0);
+  }
+
+  // Bring back a player who left early, e.g. because they played ahead of
+  // the group: their scores can be added hole by hole after the hole they
+  // left on. Once they have a score for every hole they're no longer
+  // "left early" and the round counts in full for them.
+  function addLeftPlayerHole(pid: string, holeIndex: number) {
+    const current = draftRef.current[pid] ?? [];
+    if (!round || !course || holeIndex !== current.length) return;
+    const next = { ...draftRef.current, [pid]: [...current, course.holes[holeIndex].par] };
+    draftRef.current = next;
+    setDraftScores(next);
+    const dropped = { ...round.droppedPlayers };
+    if (holeIndex + 1 >= course.holes.length) delete dropped[pid];
+    else dropped[pid] = holeIndex + 1;
+    unsavedRef.current.delete(pid);
+    void updateRound(round.id, { scores: { [pid]: next[pid] }, droppedPlayers: dropped });
   }
 
   // "Dynamic" net, like a real scorecard's stroke-index column: each
@@ -660,7 +682,7 @@ export function RoundDetailPage() {
               const droppedAt = round.droppedPlayers?.[col.pids[0]];
               const strokes = draftScores[col.pids[0]];
               if (!strokes) return null;
-              const left = droppedAt !== undefined && editHole >= droppedAt;
+              const left = droppedAt !== undefined && editHole >= strokes.length;
               const rel = scoreToPar(strokes, course, effectiveHolesFor(col.pids[0]));
               const player = playersById.get(col.pids[0]);
               return (
@@ -680,7 +702,20 @@ export function RoundDetailPage() {
                     </p>
                   </div>
                   {left ? (
-                    <p className="text-xs text-amber-600">Left after hole {droppedAt}</p>
+                    editHole === strokes.length && !isScramble ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => addLeftPlayerHole(col.pids[0], editHole)}
+                      >
+                        Left · add score
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-amber-600 text-right">
+                        {isScramble
+                          ? `Left after hole ${droppedAt}`
+                          : `Left after hole ${droppedAt} · add hole ${strokes.length + 1} first`}
+                      </p>
+                    )
                   ) : (strokes[editHole] ?? course.holes[editHole].par) <= 0 ? (
                     <Button
                       variant="secondary"
@@ -761,7 +796,8 @@ export function RoundDetailPage() {
                 </td>
                 {scoreColumns.map((col) => {
                   const droppedAt = round.droppedPlayers?.[col.pids[0]];
-                  const leftBeforeThisHole = droppedAt !== undefined && i >= droppedAt;
+                  const leftBeforeThisHole =
+                    droppedAt !== undefined && i >= (draftScores[col.pids[0]]?.length ?? droppedAt);
                   const value = draftScores[col.pids[0]]?.[i] ?? hole.par;
                   if (leftBeforeThisHole || value <= 0) {
                     return (
