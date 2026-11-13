@@ -12,6 +12,10 @@ import { NewRoundPage } from "./pages/NewRoundPage";
 import { RoundsPage } from "./pages/RoundsPage";
 import { RoundDetailPage } from "./pages/RoundDetailPage";
 import { StatsPage } from "./pages/StatsPage";
+import { StatsIndividualsPage } from "./pages/StatsIndividualsPage";
+import { StatsTeamsPage } from "./pages/StatsTeamsPage";
+import { StatsCoursesPage } from "./pages/StatsCoursesPage";
+import { HoleStatsPage } from "./pages/HoleStatsPage";
 import { PlayerStatsPage } from "./pages/PlayerStatsPage";
 import { RecordsPage } from "./pages/RecordsPage";
 import { AboutRatingsPage } from "./pages/AboutRatingsPage";
@@ -42,6 +46,11 @@ function AppRoutes() {
             <Route path="/rounds" element={<RoundsPage />} />
             <Route path="/round/:id" element={<RoundDetailPage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/stats/individuals" element={<StatsIndividualsPage />} />
+            <Route path="/stats/teams" element={<StatsTeamsPage />} />
+            <Route path="/stats/courses" element={<StatsCoursesPage />} />
+            <Route path="/stats/courses/:courseId" element={<StatsCoursesPage />} />
+            <Route path="/stats/courses/:courseId/hole/:holeNumber" element={<HoleStatsPage />} />
             <Route path="/stats/records" element={<RecordsPage />} />
             <Route path="/stats/:id" element={<PlayerStatsPage />} />
             <Route path="/about-ratings" element={<AboutRatingsPage />} />

@@ -82,37 +82,63 @@ export interface HoleAverageStat {
   entries: number;
 }
 
-/** Every hole's average raw score at a course, across every player and
- * round that's ever recorded one (every player's score counts, same as
- * courseTotalsByPlayer -- a hole is a hole regardless of game type). */
-export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverageStat[] {
-  const sums = new Array<number>(course.holes.length).fill(0);
-  const counts = new Array<number>(course.holes.length).fill(0);
-  const lows = new Array<number>(course.holes.length).fill(Infinity);
-  const highs = new Array<number>(course.holes.length).fill(-Infinity);
+/** One recorded score on one hole. */
+export interface HoleScoreEntry {
+  playerId: string;
+  roundId: string;
+  date: string;
+  strokes: number;
+  /** The hole's par in that round (a moved basket can change it per round). */
+  par: number;
+}
+
+/**
+ * Every score ever recorded on each hole of a course, indexed by hole
+ * position. Scramble rounds are left out (the whole team shares one score,
+ * so it isn't any one player's), as are holes recorded as 0 (not played).
+ * Players who left a round early still count for the holes they played.
+ */
+export function courseHoleScores(course: Course, rounds: Round[]): HoleScoreEntry[][] {
+  const byHole: HoleScoreEntry[][] = course.holes.map(() => []);
   for (const round of rounds) {
-    if (round.courseId !== course.id) continue;
+    if (round.courseId !== course.id || round.teamGameType === "scramble") continue;
+    const played = courseForRound(course, round);
     for (const playerId of round.playerIds) {
       const strokes = round.scores[playerId];
       if (!strokes) continue;
       strokes.forEach((s, i) => {
-        if (!Number.isFinite(s) || s <= 0 || i >= sums.length) return;
-        sums[i] += s;
-        counts[i] += 1;
-        if (s < lows[i]) lows[i] = s;
-        if (s > highs[i]) highs[i] = s;
+        if (!Number.isFinite(s) || s <= 0 || i >= byHole.length) return;
+        byHole[i].push({
+          playerId,
+          roundId: round.id,
+          date: round.date,
+          strokes: s,
+          par: played.holes[i].par,
+        });
       });
     }
   }
-  return course.holes.map((hole, i) => ({
-    holeNumber: hole.number,
-    par: hole.par,
-    distanceFt: hole.distanceFt,
-    average: counts[i] > 0 ? Math.round((sums[i] / counts[i]) * 100) / 100 : null,
-    low: counts[i] > 0 ? lows[i] : null,
-    high: counts[i] > 0 ? highs[i] : null,
-    entries: counts[i],
-  }));
+  return byHole;
+}
+
+/** Every hole's average raw score at a course, across every player and
+ * round that's ever recorded one (see courseHoleScores for what counts). */
+export function courseHoleAverages(course: Course, rounds: Round[]): HoleAverageStat[] {
+  const scores = courseHoleScores(course, rounds);
+  return course.holes.map((hole, i) => {
+    const list = scores[i];
+    const n = list.length;
+    const sum = list.reduce((t, e) => t + e.strokes, 0);
+    return {
+      holeNumber: hole.number,
+      par: hole.par,
+      distanceFt: hole.distanceFt,
+      average: n > 0 ? Math.round((sum / n) * 100) / 100 : null,
+      low: n > 0 ? Math.min(...list.map((e) => e.strokes)) : null,
+      high: n > 0 ? Math.max(...list.map((e) => e.strokes)) : null,
+      entries: n,
+    };
+  });
 }
 
 /**
@@ -215,6 +241,107 @@ function accumulateHoleCounts(strokes: number[], holes: Course["holes"], counts:
     const hole = holes[i];
     if (hole) classifyHole(s, hole.par, counts);
   });
+}
+
+/** Who posted a hole's lowest (or highest) score, and how often. */
+export interface HoleExtreme {
+  strokes: number;
+  holders: { playerId: string; times: number; latestRoundId: string; latestDate: string }[];
+}
+
+export interface HolePlayerStat {
+  playerId: string;
+  rounds: number;
+  average: number;
+  best: number;
+  worst: number;
+  /** Times they scored under par on this hole. */
+  underPar: number;
+}
+
+export interface HoleDetail {
+  holeNumber: number;
+  par: number;
+  distanceFt?: number;
+  entries: number;
+  average: number | null;
+  /** 1 = the course's hardest hole; null if nobody has played it. */
+  handicapRank: number | null;
+  counts: HoleCounts;
+  lowest: HoleExtreme | null;
+  highest: HoleExtreme | null;
+  byPlayer: HolePlayerStat[];
+}
+
+function holeExtreme(entries: HoleScoreEntry[], strokes: number): HoleExtreme {
+  const byPlayer = new Map<string, HoleExtreme["holders"][number]>();
+  for (const e of entries) {
+    if (e.strokes !== strokes) continue;
+    const cur = byPlayer.get(e.playerId);
+    if (!cur) {
+      byPlayer.set(e.playerId, {
+        playerId: e.playerId,
+        times: 1,
+        latestRoundId: e.roundId,
+        latestDate: e.date,
+      });
+    } else {
+      cur.times += 1;
+      if (e.date > cur.latestDate) {
+        cur.latestDate = e.date;
+        cur.latestRoundId = e.roundId;
+      }
+    }
+  }
+  const holders = [...byPlayer.values()].sort((a, b) => b.times - a.times);
+  return { strokes, holders };
+}
+
+/** Everything recorded on one hole of a course: averages, how many aces /
+ * birdies / pars / bogeys..., who has the lowest and highest score, and
+ * each player's own numbers there. */
+export function courseHoleDetail(course: Course, rounds: Round[], holeIndex: number): HoleDetail {
+  const hole = course.holes[holeIndex];
+  const entries = courseHoleScores(course, rounds)[holeIndex] ?? [];
+  const averages = rankCourseHoleHandicaps(courseHoleAverages(course, rounds));
+  const counts = emptyHoleCounts();
+  for (const e of entries) classifyHole(e.strokes, e.par, counts);
+
+  const players = new Map<string, HoleScoreEntry[]>();
+  for (const e of entries) (players.get(e.playerId) ?? players.set(e.playerId, []).get(e.playerId)!).push(e);
+
+  const low = entries.length ? Math.min(...entries.map((e) => e.strokes)) : null;
+  const high = entries.length ? Math.max(...entries.map((e) => e.strokes)) : null;
+  return {
+    holeNumber: hole.number,
+    par: hole.par,
+    distanceFt: hole.distanceFt,
+    entries: entries.length,
+    average: averages[holeIndex].average,
+    handicapRank: averages[holeIndex].handicapRank,
+    counts,
+    lowest: low === null ? null : holeExtreme(entries, low),
+    highest: high === null ? null : holeExtreme(entries, high),
+    byPlayer: [...players.entries()]
+      .map(([playerId, list]) => ({
+        playerId,
+        rounds: list.length,
+        average: Math.round((list.reduce((t, e) => t + e.strokes, 0) / list.length) * 100) / 100,
+        best: Math.min(...list.map((e) => e.strokes)),
+        worst: Math.max(...list.map((e) => e.strokes)),
+        underPar: list.filter((e) => e.strokes < e.par).length,
+      }))
+      .sort((a, b) => a.average - b.average),
+  };
+}
+
+/** Hole-score counts (aces/birdies/pars/...) across every hole of a course. */
+export function courseHoleCounts(course: Course, rounds: Round[]): HoleCounts {
+  const counts = emptyHoleCounts();
+  for (const list of courseHoleScores(course, rounds)) {
+    for (const e of list) classifyHole(e.strokes, e.par, counts);
+  }
+  return counts;
 }
 
 /** A player's lifetime hole-score counts (aces/birdies/pars/...) across every round. */
