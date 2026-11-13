@@ -5,6 +5,7 @@ import {
   computeScoreStats,
   courseAverageDuration,
   courseHoleAverages,
+  courseHoleCounts,
   courseTopScores,
   courseTotalsByPlayer,
   rankCourseHoleHandicaps,
@@ -12,6 +13,7 @@ import {
 import { formatDuration } from "../lib/duration";
 import { teamLabel, teamScoresAtCourse } from "../lib/teamStats";
 import { Button, Card, PageHeader } from "../components/ui";
+import { HoleBreakdown } from "../components/HoleBreakdown";
 import type { Course, Player } from "../types";
 
 const GAME_LABELS = { scramble: "Scramble", bestBall: "Best ball", teamTotal: "Team total" } as const;
@@ -62,6 +64,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
   const totalDistance = course.holes.reduce((s, h) => s + (h.distanceFt ?? 0), 0);
   const holeHandicaps = rankCourseHoleHandicaps(courseHoleAverages(course, rounds));
 
+  const holeCounts = courseHoleCounts(course, rounds);
   const totalsByPlayer = courseTotalsByPlayer(course.id, rounds);
   const duration = courseAverageDuration(course.id, rounds);
   const overall = computeScoreStats([...totalsByPlayer.values()].flat());
@@ -105,7 +108,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
         </p>
         <p className="text-xs text-slate-400 mb-2">
           {course.holes.length} holes · par {par}
-          {hasAnyDistance ? ` · ${totalDistance.toLocaleString()} ft` : ""}
+          {hasAnyDistance ? ` · ${totalDistance.toLocaleString()} ft` : ""} · tap a hole for its stats
         </p>
         <table className="w-full text-sm">
           <thead>
@@ -114,13 +117,20 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
               <th className="font-medium pb-2 text-center">Yardage</th>
               <th className="font-medium pb-2 text-center">Avg</th>
               <th className="font-medium pb-2 text-center">Handicap</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {holeHandicaps.map((h) => (
               <tr key={h.holeNumber} className="border-t border-slate-100">
                 <td className="py-1.5 whitespace-nowrap">
-                  #{h.holeNumber} <span className="text-slate-400">(par {h.par})</span>
+                  <Link
+                    to={`/stats/courses/${course.id}/hole/${h.holeNumber}`}
+                    className="font-medium text-green-700"
+                  >
+                    #{h.holeNumber}
+                  </Link>{" "}
+                  <span className="text-slate-400">(par {h.par})</span>
                 </td>
                 <td className="py-1.5 text-center tabular-nums text-slate-600">
                   {h.distanceFt ? `${h.distanceFt}ft` : "—"}
@@ -131,10 +141,22 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
                 <td className="py-1.5 text-center tabular-nums font-semibold">
                   {h.handicapRank ?? "—"}
                 </td>
+                <td className="py-1.5 pl-1 text-right text-slate-300">
+                  <Link to={`/stats/courses/${course.id}/hole/${h.holeNumber}`} aria-label={`Hole ${h.holeNumber} stats`}>
+                    ›
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Scoring breakdown (all holes)
+        </p>
+        <HoleBreakdown counts={holeCounts} />
       </Card>
 
       <Card className="mb-4">
@@ -256,7 +278,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
                       {" / "}
                       <span className="text-red-600 font-semibold">{stats.high}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
+                    <p className="text-[11px] text-slate-400">{stats.rounds} {stats.rounds === 1 ? "round" : "rounds"}</p>
                   </div>
                 </Link>
               </li>
@@ -289,7 +311,7 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
                     {" / "}
                     <span className="text-red-600 font-semibold">{stats.high}</span>
                   </p>
-                  <p className="text-[11px] text-slate-400">{stats.rounds} rounds</p>
+                  <p className="text-[11px] text-slate-400">{stats.rounds} {stats.rounds === 1 ? "round" : "rounds"}</p>
                 </div>
               </li>
             ))}
