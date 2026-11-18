@@ -61,7 +61,7 @@ export function PlayersPage() {
                       {player.isSelf ? " (you)" : !player.hasAccount ? " (guest)" : ""}
                     </p>
                     <p className="text-xs text-slate-400">
-                      Handicap {handicap === null ? "— (needs 3+ rounds)" : handicap}
+                      Handicap {handicap === null ? "— (needs 2+ rounds)" : handicap}
                     </p>
                   </div>
                 </div>
