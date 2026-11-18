@@ -40,7 +40,11 @@ export function AboutRatingsPage() {
             <li>3–4 rounds: best 1</li>
             <li>5–6 rounds: best 2</li>
             <li>7–8 rounds: best 3</li>
-            <li>9–20 rounds: best 4 through 8, scaling up</li>
+            <li>9–11 rounds: best 4</li>
+            <li>12–14 rounds: best 5</li>
+            <li>15–16 rounds: best 6</li>
+            <li>17–18 rounds: best 7</li>
+            <li>19–20 rounds: best 8</li>
           </ul>
           <p className="text-sm text-slate-600 mt-2">
             A lower (more negative) handicap means you tend to shoot under a course's baseline;
@@ -52,12 +56,24 @@ export function AboutRatingsPage() {
         </Card>
 
         <Card>
-          <p className="font-semibold text-slate-800 mb-1">All data stays on this phone</p>
+          <p className="font-semibold text-slate-800 mb-1">Recalculated automatically</p>
           <p className="text-sm text-slate-600">
-            Courses, players, and rounds are stored only in this browser's local storage —
-            nothing is sent to a server. That keeps things simple and private, but it also means
-            data isn't synced between devices, so scores for friends are the ones you enter
-            here, not synced from their own phones.
+            Handicaps and ratings aren't stored — they're worked out again from your rounds
+            every time you look, so a new or edited round shows up right away.
+          </p>
+          <p className="text-sm text-slate-600 mt-2">
+            Individual rounds count, as do best-ball and team-total rounds (each player's own
+            score). Scramble rounds, rounds you left early and rounds you joined late don't. If a
+            hole's par was changed for a round, that round's baseline shifts to match.
+          </p>
+        </Card>
+
+        <Card>
+          <p className="font-semibold text-slate-800 mb-1">Handicapped rounds</p>
+          <p className="text-sm text-slate-600">
+            The lowest handicap in the group plays scratch and everyone else gets the gap as
+            bonus strokes, rounded to a whole stroke. They're locked in when the round starts,
+            so later edits don't change strokes already given.
           </p>
         </Card>
       </div>
