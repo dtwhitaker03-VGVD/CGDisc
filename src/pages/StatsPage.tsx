@@ -87,7 +87,7 @@ export function StatsPage() {
                 ) : (
                   <>
                     You have {myDiffs.length} counting {myDiffs.length === 1 ? "round" : "rounds"};
-                    a handicap starts at 3.
+                    a handicap starts at 2.
                   </>
                 )}
               </p>
@@ -99,7 +99,7 @@ export function StatsPage() {
             <p>
               Your handicap is the average of your <strong>best</strong> differentials from your{" "}
               <strong>last 20 rounds</strong>, on any course. The more rounds you have, the more of
-              your best ones are averaged: 3–4 rounds use the best 1, 5–6 the best 2, 7–8 the best
+              your best ones are averaged: 2–4 rounds use the best 1, 5–6 the best 2, 7–8 the best
               3, then up to the best 8 at 19–20 rounds.
             </p>
             <p>

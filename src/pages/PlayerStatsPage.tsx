@@ -263,7 +263,7 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
           <p className="text-[11px] text-slate-400 mt-0.5">
             {handicap !== null
               ? `Best of ${Math.min(diffs.length, 20)} recent rounds`
-              : `${diffs.length} of 3 rounds needed`}
+              : `${diffs.length} of 2 rounds needed`}
           </p>
         </Card>
         <Card>
@@ -311,7 +311,7 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
           label="Handicap over time"
           invert
           formatValue={(v) => formatHandicap(v)}
-          emptyText={`Needs 3 counting rounds (${diffs.length} so far).`}
+          emptyText={`Needs 2 counting rounds (${diffs.length} so far).`}
         />
         {handicapPoints.length > 1 && (
           <p className="text-[11px] text-slate-400 mt-1">
@@ -372,7 +372,7 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
             </p>
           </>
         ) : (
-          <p className="text-sm text-slate-500">Needs a handicap (3+ rounds).</p>
+          <p className="text-sm text-slate-500">Needs a handicap (2+ rounds).</p>
         )}
       </Card>
 

@@ -682,7 +682,7 @@ export function NewRoundPage() {
             {roundMode === "handicapped" &&
               (!canPlayHandicapped ? (
                 <p className="text-xs text-slate-400">
-                  Everyone playing needs a handicap (3+ rounds each) to unlock this.
+                  Everyone playing needs a handicap (2+ rounds each) to unlock this.
                   {missingHandicapPlayers.length > 0 &&
                     ` Still need one for ${missingHandicapPlayers.map((p) => p.name).join(", ")}.`}
                 </p>

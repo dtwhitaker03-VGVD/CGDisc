@@ -22,7 +22,7 @@ function tally(r: Record3, mine: number, theirs: number) {
   else r.t += 1;
 }
 
-/** A player's current handicap, or null with fewer than 3 usable rounds. */
+/** A player's current handicap, or null with fewer than 2 usable rounds. */
 export function playerHandicapValue(
   playerId: string,
   rounds: Round[],

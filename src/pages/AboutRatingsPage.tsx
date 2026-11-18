@@ -36,8 +36,8 @@ export function AboutRatingsPage() {
             picks how many of your best rounds to average as you build up history:
           </p>
           <ul className="text-sm text-slate-600 list-disc pl-5 mt-2 space-y-0.5">
-            <li>Fewer than 3 rounds: no handicap yet</li>
-            <li>3–4 rounds: best 1</li>
+            <li>Fewer than 2 rounds: no handicap yet</li>
+            <li>2–4 rounds: best 1</li>
             <li>5–6 rounds: best 2</li>
             <li>7–8 rounds: best 3</li>
             <li>9–11 rounds: best 4</li>

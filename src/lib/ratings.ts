@@ -69,7 +69,7 @@ export interface Differential {
  * adapted since disc golf has no equivalent official standard.
  */
 function bestCountFor(n: number): number {
-  if (n < 3) return 0;
+  if (n < 2) return 0;
   if (n <= 4) return 1;
   if (n <= 6) return 2;
   if (n <= 8) return 3;
@@ -85,7 +85,7 @@ const MAX_ROUNDS_CONSIDERED = 20;
 /**
  * Estimated handicap: the average of a player's best recent differentials
  * (score minus each course's rating basis), most recent rounds first.
- * Returns null when there isn't enough history yet (fewer than 3 rounds).
+ * Returns null when there isn't enough history yet (fewer than 2 rounds).
  */
 export function computeHandicap(differentials: Differential[]): number | null {
   const recent = [...differentials]
@@ -182,7 +182,7 @@ export function playerDifferentials(
 /**
  * A player's handicap as it stood right after each of their rounds:
  * roundId -> handicap counting that round and every earlier one (null while
- * there are fewer than 3 counting rounds). Rounds are ordered by date, then by
+ * there are fewer than 2 counting rounds). Rounds are ordered by date, then by
  * when they were logged. Rounds that don't count toward the handicap (scramble,
  * left early, joined late) carry the handicap in effect at the time. The last
  * round's value always equals computeHandicap of all the player's differentials.
