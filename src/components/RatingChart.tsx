@@ -14,6 +14,7 @@ export function RatingChart({
   label = "Rating trend over time",
   formatValue = (v: number) => `${v}`,
   emptyText = "No rounds yet.",
+  invert = false,
 }: {
   points: Point[];
   color: string;
@@ -22,6 +23,8 @@ export function RatingChart({
   /** Formats the min/max axis labels and the single-point value. */
   formatValue?: (v: number) => string;
   emptyText?: string;
+  /** Plot lower values higher, for stats where lower is better (e.g. handicap). */
+  invert?: boolean;
 }) {
   if (points.length === 0) {
     return <p className="text-sm text-slate-400 py-8 text-center">{emptyText}</p>;
@@ -45,7 +48,7 @@ export function RatingChart({
   const stepX = (WIDTH - PAD_X * 2) / (points.length - 1);
   const coords = points.map((p, i) => {
     const x = PAD_X + i * stepX;
-    const y = PAD_Y + (HEIGHT - PAD_Y * 2) * (1 - (p.rating - min) / range);
+    const y = PAD_Y + (HEIGHT - PAD_Y * 2) * (invert ? (p.rating - min) / range : 1 - (p.rating - min) / range);
     return { x, y, rating: p.rating };
   });
 
@@ -66,10 +69,10 @@ export function RatingChart({
         <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 4 : 2.5} fill={color} />
       ))}
       <text x={PAD_X} y={12} fontSize={10} fill="#94a3b8">
-        {formatValue(max)}
+        {formatValue(invert ? min : max)}
       </text>
       <text x={PAD_X} y={HEIGHT - 4} fontSize={10} fill="#94a3b8">
-        {formatValue(min)}
+        {formatValue(invert ? max : min)}
       </text>
     </svg>
   );
