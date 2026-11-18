@@ -309,12 +309,13 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
           points={handicapPoints}
           color={player.color}
           label="Handicap over time"
+          invert
           formatValue={(v) => formatHandicap(v)}
           emptyText={`Needs 3 counting rounds (${diffs.length} so far).`}
         />
         {handicapPoints.length > 1 && (
           <p className="text-[11px] text-slate-400 mt-1">
-            Handicap after each counting round. Lower is better.
+            Handicap after each counting round. Up means a lower (better) handicap.
           </p>
         )}
       </Card>
