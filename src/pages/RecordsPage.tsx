@@ -3,6 +3,7 @@ import { useAppData } from "../store/AppDataContext";
 import {
   INDIVIDUAL_RECORD_LABEL,
   TEAM_RECORD_LABEL,
+  allAces,
   courseRecords,
   type IndividualRecordType,
   type RecordEntry,
@@ -15,6 +16,7 @@ const rel = (v: number) => (v === 0 ? "E" : v > 0 ? `+${v}` : `${v}`);
 export function RecordsPage() {
   const { rounds, coursesById, playersById } = useAppData();
   const records = courseRecords(rounds, coursesById);
+  const aces = allAces(rounds, coursesById);
 
   const holders = (e: RecordEntry, team: boolean) =>
     e.holders.map((h, i) => (
@@ -33,13 +35,40 @@ export function RecordsPage() {
     <div>
       <PageHeader
         title="Records"
-        subtitle="Best scores at each course"
+        subtitle="Aces and best scores at each course"
         action={
           <Link to="/stats" className="text-sm font-medium text-green-700">
             ← Stats
           </Link>
         }
       />
+
+      {aces.length > 0 && (
+        <Card className="mb-3">
+          <p className="font-semibold text-slate-900">
+            Aces <span className="text-sm font-normal text-slate-400">· {aces.length}</span>
+          </p>
+          <ul className="divide-y divide-slate-100 mt-2">
+            {aces.map((a, i) => (
+              <li key={`${a.roundId}-${a.holeNumber}-${i}`}>
+                <Link to={`/round/${a.roundId}`} className="flex items-start justify-between gap-3 py-1.5">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900">
+                      {a.playerIds.length > 1
+                        ? teamLabel(a.playerIds, playersById)
+                        : (playersById.get(a.playerIds[0])?.name ?? "Someone")}
+                    </span>
+                    <span className="block text-[11px] text-slate-400">
+                      {coursesById.get(a.courseId)?.name ?? "Course"} · Hole {a.holeNumber}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-slate-400 tabular-nums">{a.date}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {records.length === 0 ? (
         <EmptyState icon="🏆" title="No records yet" subtitle="Finish a round to set the first ones." />

@@ -119,3 +119,58 @@ export function courseRecords(rounds: Round[], coursesById: Map<string, Course>)
       (coursesById.get(a.courseId)?.name ?? "").localeCompare(coursesById.get(b.courseId)?.name ?? ""),
     );
 }
+
+export interface AceEntry {
+  /** The player who aced it, or the whole team for a scramble ace. */
+  playerIds: string[];
+  roundId: string;
+  courseId: string;
+  holeNumber: number;
+  date: string;
+}
+
+/**
+ * Every hole-in-one (a score of 1) across all rounds, newest first. In a
+ * scramble the team shares one ball, so a scramble ace is listed once for
+ * the whole team rather than once per teammate.
+ */
+export function allAces(rounds: Round[], coursesById: Map<string, Course>): AceEntry[] {
+  const aces: (AceEntry & { createdAt: string; order: number })[] = [];
+  for (const round of rounds) {
+    const course = coursesById.get(round.courseId);
+    const scramble = !!round.teamAssignments && !isIndividuallyScored(round);
+    const groups: string[][] = [];
+    if (scramble) {
+      const byTeam = new Map<number, string[]>();
+      for (const pid of round.playerIds) {
+        const t = round.teamAssignments![pid];
+        if (t === undefined) continue;
+        (byTeam.get(t) ?? byTeam.set(t, []).get(t)!).push(pid);
+      }
+      groups.push(...[...byTeam.entries()].sort((a, b) => a[0] - b[0]).map(([, ids]) => ids));
+    } else {
+      groups.push(...round.playerIds.map((pid) => [pid]));
+    }
+    for (const ids of groups) {
+      const strokes = ids.map((pid) => round.scores[pid]).find((s) => s && s.length > 0);
+      strokes?.forEach((s, i) => {
+        if (s !== 1) return;
+        aces.push({
+          playerIds: ids,
+          roundId: round.id,
+          courseId: round.courseId,
+          holeNumber: course?.holes[i]?.number ?? i + 1,
+          date: round.date,
+          createdAt: round.createdAt,
+          order: i,
+        });
+      });
+    }
+  }
+  return aces
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt) || a.order - b.order,
+    )
+    .map(({ createdAt: _c, order: _o, ...ace }) => ace);
+}
