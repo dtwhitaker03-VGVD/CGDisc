@@ -8,15 +8,29 @@ const HEIGHT = 140;
 const PAD_X = 8;
 const PAD_Y = 16;
 
-export function RatingChart({ points, color }: { points: Point[]; color: string }) {
+export function RatingChart({
+  points,
+  color,
+  label = "Rating trend over time",
+  formatValue = (v: number) => `${v}`,
+  emptyText = "No rounds yet.",
+}: {
+  points: Point[];
+  color: string;
+  /** Accessible name for the chart. */
+  label?: string;
+  /** Formats the min/max axis labels and the single-point value. */
+  formatValue?: (v: number) => string;
+  emptyText?: string;
+}) {
   if (points.length === 0) {
-    return <p className="text-sm text-slate-400 py-8 text-center">No rounds yet.</p>;
+    return <p className="text-sm text-slate-400 py-8 text-center">{emptyText}</p>;
   }
   if (points.length === 1) {
     return (
       <div className="py-6 text-center">
         <p className="text-3xl font-bold tabular-nums" style={{ color }}>
-          {points[0].rating}
+          {formatValue(points[0].rating)}
         </p>
         <p className="text-xs text-slate-400 mt-1">Play another round to see a trend.</p>
       </div>
@@ -38,7 +52,7 @@ export function RatingChart({ points, color }: { points: Point[]; color: string 
   const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label="Rating trend over time">
+    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label={label}>
       <line
         x1={PAD_X}
         x2={WIDTH - PAD_X}
@@ -52,10 +66,10 @@ export function RatingChart({ points, color }: { points: Point[]; color: string 
         <circle key={i} cx={c.x} cy={c.y} r={i === coords.length - 1 ? 4 : 2.5} fill={color} />
       ))}
       <text x={PAD_X} y={12} fontSize={10} fill="#94a3b8">
-        {max}
+        {formatValue(max)}
       </text>
       <text x={PAD_X} y={HEIGHT - 4} fontSize={10} fill="#94a3b8">
-        {min}
+        {formatValue(min)}
       </text>
     </svg>
   );

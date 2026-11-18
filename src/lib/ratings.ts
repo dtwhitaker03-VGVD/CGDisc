@@ -178,3 +178,38 @@ export function playerDifferentials(
   }
   return out;
 }
+
+/**
+ * A player's handicap as it stood right after each of their rounds:
+ * roundId -> handicap counting that round and every earlier one (null while
+ * there are fewer than 3 counting rounds). Rounds are ordered by date, then by
+ * when they were logged. Rounds that don't count toward the handicap (scramble,
+ * left early, joined late) carry the handicap in effect at the time. The last
+ * round's value always equals computeHandicap of all the player's differentials.
+ */
+export function handicapHistory(
+  playerId: string,
+  rounds: Round[],
+  coursesById: Map<string, Course>,
+): Map<string, number | null> {
+  const diffByRound = new Map(
+    playerDifferentials(playerId, rounds, coursesById).map((d) => [d.roundId, d]),
+  );
+  const chronological = rounds
+    .filter((r) => r.playerIds.includes(playerId))
+    .sort((a, b) =>
+      a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1,
+    );
+  const sofar: Differential[] = [];
+  const out = new Map<string, number | null>();
+  let current: number | null = null;
+  for (const r of chronological) {
+    const d = diffByRound.get(r.id);
+    if (d) {
+      sofar.push(d);
+      current = computeHandicap(sofar);
+    }
+    out.set(r.id, current);
+  }
+  return out;
+}
