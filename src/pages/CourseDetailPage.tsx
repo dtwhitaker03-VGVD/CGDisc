@@ -16,6 +16,14 @@ import { Button, Card, PageHeader } from "../components/ui";
 import { HoleBreakdown } from "../components/HoleBreakdown";
 import type { Course, Player } from "../types";
 
+/** Green under par, red over par, neutral at par (or no score yet). */
+function parColor(score: number | null, par: number): string {
+  if (score === null) return "text-slate-400";
+  if (score < par) return "text-green-600";
+  if (score > par) return "text-red-600";
+  return "text-slate-900";
+}
+
 const GAME_LABELS = { scramble: "Scramble", bestBall: "Best ball", teamTotal: "Team total" } as const;
 
 function relToPar(total: number, par: number): string {
@@ -115,7 +123,9 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
             <tr className="text-slate-400 text-xs">
               <th className="text-left font-medium pb-2">Hole</th>
               <th className="font-medium pb-2 text-center">Yardage</th>
+              <th className="font-medium pb-2 text-center">Low</th>
               <th className="font-medium pb-2 text-center">Avg</th>
+              <th className="font-medium pb-2 text-center">High</th>
               <th className="font-medium pb-2 text-center">Handicap</th>
               <th />
             </tr>
@@ -135,8 +145,14 @@ export function CourseStatsView({ course, embedded = false }: { course: Course; 
                 <td className="py-1.5 text-center tabular-nums text-slate-600">
                   {h.distanceFt ? `${h.distanceFt}ft` : "—"}
                 </td>
-                <td className="py-1.5 text-center tabular-nums text-slate-900 font-semibold">
+                <td className={`py-1.5 text-center tabular-nums ${parColor(h.low, h.par)}`}>
+                  {h.low ?? "—"}
+                </td>
+                <td className={`py-1.5 text-center tabular-nums font-semibold ${parColor(h.average, h.par)}`}>
                   {h.average ?? "—"}
+                </td>
+                <td className={`py-1.5 text-center tabular-nums ${parColor(h.high, h.par)}`}>
+                  {h.high ?? "—"}
                 </td>
                 <td className="py-1.5 text-center tabular-nums font-semibold">
                   {h.handicapRank ?? "—"}
