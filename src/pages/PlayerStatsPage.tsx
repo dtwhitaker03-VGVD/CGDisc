@@ -4,6 +4,7 @@ import { useAppData } from "../store/AppDataContext";
 import {
   coursePar,
   computeHandicap,
+  handicapHistory,
   joinedAtHole,
   playerDifferentials,
   roundRating,
@@ -205,6 +206,14 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
       rating: roundRating(r.scores[player.id], courseForRound(coursesById.get(r.courseId)!, r)),
     }));
 
+  // Handicap right after each round; the trend plots each counting round once a handicap exists.
+  const handicapAfter = handicapHistory(player.id, rounds, coursesById);
+  const countingRoundIds = new Set(diffs.map((d) => d.roundId));
+  const handicapPoints = [...playerRounds]
+    .reverse()
+    .filter((r) => countingRoundIds.has(r.id) && handicapAfter.get(r.id) != null)
+    .map((r) => ({ date: r.date, rating: handicapAfter.get(r.id) as number }));
+
   // Best course: lowest average relative to par, ties to whoever has more rounds there, then by name.
   const courseRel = playerCourseRelToPar(player.id, rounds, coursesById);
   const bestCourseStat: CourseRelStat | undefined = [...courseRel].sort((a, b) => {
@@ -290,6 +299,24 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
           Rating trend
         </p>
         <RatingChart points={chartPoints} color={player.color} />
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Handicap trend
+        </p>
+        <RatingChart
+          points={handicapPoints}
+          color={player.color}
+          label="Handicap over time"
+          formatValue={(v) => formatHandicap(v)}
+          emptyText={`Needs 3 counting rounds (${diffs.length} so far).`}
+        />
+        {handicapPoints.length > 1 && (
+          <p className="text-[11px] text-slate-400 mt-1">
+            Handicap after each counting round. Lower is better.
+          </p>
+        )}
       </Card>
 
       <Card className="mb-4">
@@ -512,6 +539,7 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
               const strokes = r.scores[player.id];
               const left = r.droppedPlayers?.[player.id];
               const rel = scoreToPar(strokes, course, left);
+              const hcp = handicapAfter.get(r.id) ?? null;
               return (
                 <li key={r.id}>
                   <Link to={`/round/${r.id}`} className="flex items-center justify-between py-2.5">
@@ -522,6 +550,12 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
                     <div className="text-right">
                       <p className="font-semibold tabular-nums text-sm">
                         {totalScore(strokes)} ({formatVsPar(rel)})
+                        <span
+                          className="ml-2 text-xs font-medium text-slate-500"
+                          title="Handicap after this round"
+                        >
+                          HCP {formatHandicap(hcp)}
+                        </span>
                       </p>
                       <p className="text-[11px] text-slate-400">
                         {left !== undefined
