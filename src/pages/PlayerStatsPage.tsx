@@ -26,6 +26,7 @@ import {
   type HoleRelStat,
 } from "../lib/stats";
 import { roundTags } from "../lib/roundTags";
+import { bestHotStreak, HOT_STREAK_MIN } from "../lib/hotStreak";
 import { courseForRound } from "../lib/roundCourse";
 import { headToHeadRecords, playerNetStats, type Record3 } from "../lib/headToHead";
 import { RatingChart } from "../components/RatingChart";
@@ -188,6 +189,7 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
 
   const diffs = playerDifferentials(player.id, rounds, coursesById);
   const handicap = computeHandicap(diffs);
+  const hotStreak = bestHotStreak(player.id, rounds, coursesById);
 
   const playerRounds = rounds
     .filter((r) => r.playerIds.includes(player.id) && coursesById.has(r.courseId))
@@ -291,6 +293,33 @@ export function PlayerStatsView({ player, embedded = false }: { player: Player; 
           </Link>
         ) : (
           <p className="text-sm text-slate-400">—</p>
+        )}
+      </Card>
+
+      <Card className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
+          Best hot streak {hotStreak && hotStreak.length >= HOT_STREAK_MIN && "🔥"}
+        </p>
+        {hotStreak ? (
+          <Link to={`/round/${hotStreak.roundId}`} className="block">
+            <p className="text-2xl font-bold tabular-nums text-green-600">
+              {hotStreak.length}{" "}
+              <span className="text-sm font-medium text-slate-500">
+                {hotStreak.length === 1 ? "hole" : "holes"} under par in a row
+              </span>
+            </p>
+            <p className="text-sm text-slate-700 mt-0.5">
+              {hotStreak.startHole === hotStreak.endHole
+                ? `Hole ${hotStreak.startHole}`
+                : `Holes ${hotStreak.startHole}–${hotStreak.endHole}`}{" "}
+              <span className="text-slate-400 tabular-nums">({hotStreak.strokes.join("-")})</span>
+            </p>
+            <p className="text-xs text-slate-400">
+              {coursesById.get(hotStreak.courseId)?.name ?? "Course"} · {hotStreak.date}
+            </p>
+          </Link>
+        ) : (
+          <p className="text-sm text-slate-400">No holes under par yet.</p>
         )}
       </Card>
 
