@@ -10,6 +10,7 @@ import {
   playerDifferentials,
   totalScore,
 } from "../lib/ratings";
+import { HOT_STREAK_MIN, liveHotStreak } from "../lib/hotStreak";
 import {
   courseHoleAverages,
   courseHoleHandicapOrder,
@@ -1602,6 +1603,7 @@ export function NewRoundPage() {
               const rel = liveRelToPar(playerScores);
               // Handicapped rounds: strokes this player gets (or gives back) on this hole.
               const myHole = playerHoleStatsById[pid]?.[activeHoleIndex];
+              const onFire = liveHotStreak(playerScores, course.holes, activeHoleIndex) >= HOT_STREAK_MIN;
               const holeStrokes = isHandicapped
                 ? (allocateHandicapStrokes(allowances[pid] ?? 0, dynamicHoleOrder)[activeHoleIndex] ?? 0)
                 : 0;
@@ -1614,6 +1616,11 @@ export function NewRoundPage() {
                         style={{ backgroundColor: player.color }}
                       />
                       {player.name}
+                      {onFire && (
+                        <span role="img" aria-label="Hot streak: under par three holes in a row">
+                          🔥
+                        </span>
+                      )}
                     </p>
                     {myHole?.average != null && (
                       <p className="text-[11px] text-slate-500 tabular-nums">
